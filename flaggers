@@ -1,0 +1,138 @@
+[1360 0.0 1003]
+[1360 0.0 1090]
+8.4 1
+9
+@30sec_30.png
+@30sec_turn.seq
+@30sec_5.png
+@30sec_run.seq
+@30sec_done.png
+
+[1610 0.0 1090]
+8 -1
+@finish_green.png
+@finish_crossed.png
+@finish_white.png
+@checkerwave.seq
+
+[1671 3.1 1240]
+9.6 1
+26 27 28 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1036 3.1 870]
+9.6 1
+1 2 3 4 
+@flagger_resting.png
+@flagger_waving.seq
+
+[1033 3.1 1288]
+9.6 1
+4 5 6 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1211 3.1 1375]
+9.6 1
+6 7 8 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1004 3.1 1577]
+9.6 1
+8 9 10 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[547 3.1 1379]
+9.6 1
+10 11 12 13 
+@flagger_resting.png
+@flagger_waving.seq
+
+[698 3.1 1124]
+9.6 1
+13 14 -1 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[746 3.1 893]
+9.6 1
+14 15 16 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1317 3.1 567]
+9.6 1
+17 18 -1 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1559 3.1 626]
+9.6 1
+18 19 -1 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1443 3.1 475]
+9.6 1
+19 20 21 22 
+@flagger_resting.png
+@flagger_waving.seq
+
+[1612 3.1 721]
+9.6 1
+22 23 24 25 
+@flagger_resting.png
+@flagger_waving.seq
+
+[1307 3.1 756]
+9.6 1
+23 24 -1 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+[1757 3.1 888]
+9.6 1
+26 27 28 -1
+@flagger_resting.png
+@flagger_waving.seq
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
