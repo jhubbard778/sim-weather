@@ -1,44 +1,51 @@
 
-var track_folder_name = "tracktitanwet";
-// stores terrain.hf info
-var terrain = {
+const track_folder_name = "tracktitanwet";
+const terrain = {
     // terrain.png dimensions
     size: 2049,
     // track scale
-    scale: 1,
-    // max height
-    max: 102.878342,
+    scale: 1
 };
 
 // Different rain sounds depending on weather type.
 var rain_sounds = [];
-var rain_sound_directories = [
+const rain_sound_directories = [
   "@" + track_folder_name + "/sounds/weather/rain/rain.raw",
   "@" + track_folder_name + "/sounds/weather/rain/rain2.raw",
 ];
 
 // Distant ambient thunder sounds
 var distant_thunder = [];
-var distant_thunder_directories = [
+const distant_thunder_directories = [
   "@" + track_folder_name + "/sounds/weather/distant-thunder/distant-thunder1.raw",
   "@" + track_folder_name + "/sounds/weather/distant-thunder/distant-thunder2.raw",
+  "@" + track_folder_name + "/sounds/weather/distant-thunder/distant-thunder3.raw",
+  "@" + track_folder_name + "/sounds/weather/distant-thunder/distant-thunder4.raw",
 ];
 
 // Basic thunder sounds
 var thunder_sounds = [];
-var thunder_sound_directories = [
+const thunder_sound_directories = [
   "@" + track_folder_name + "/sounds/weather/thunder/thunder1.raw",
   "@" + track_folder_name + "/sounds/weather/thunder/thunder2.raw",
+  "@" + track_folder_name + "/sounds/weather/thunder/thunder3.raw",
+  "@" + track_folder_name + "/sounds/weather/thunder/thunder4.raw",
+  "@" + track_folder_name + "/sounds/weather/thunder/thunder5.raw",
+  "@" + track_folder_name + "/sounds/weather/thunder/thunder6.raw",
+  "@" + track_folder_name + "/sounds/weather/thunder/thunder7.raw",
+  "@" + track_folder_name + "/sounds/weather/thunder/thunder8.raw",
 ];
 
 // Heavy thunder sounds
 var heavy_thunder_sounds = [];
-var heavy_thunder_directories = [
+const heavy_thunder_directories = [
   "@" + track_folder_name + "/sounds/weather/heavy-thunder/heavy-thunder1.raw",
   "@" + track_folder_name + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
+  "@" + track_folder_name + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
+  "@" + track_folder_name + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
 ];
 
-var weather_types = [
+const weather_types = [
   "clear", "light-rain", "rain", "heavy-rain",
   "light-thunder-no-rain", "light-thunder-rain", "light-thunder-heavy-rain",
   "med-thunder-no-rain", "med-thunder-rain", "med-thunder-heavy-rain",
@@ -90,7 +97,6 @@ function updateCamPosition() {
 var got_time_lighning = false;
 var time_lighning_strike;
 var weather_type;
-var time_thunder = -1;
 var thunder_pending = false;
 var lightning_coords = {
   x: 0,
@@ -101,14 +107,22 @@ var type_of_thunder_playing;
 var thunder_sound_index = 0;
 // speed of sound in ft/s
 const speed_of_sound = 1117.2;
-const delay = 8;
 const time_for_another_lightning = 10;
 const base_thunder_vol = 50;
 
 // multiplied by the size of the map, it's where the lightning can strike outside the map
 // We will allow lightning to happen outside the map at 3x scale
-var map_size_for_lightning = 3;
-var distance_from_rider_to_lightning_origin;
+const map_size_for_lightning = 3;
+
+// Max and Min Coordinates of x and z where lightning can strike
+const min_coords = -(1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale)));
+const max_coords = (1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale))) + (terrain.size - 1);
+
+/* get the max coordinate of lightning outside map, multiple by sqrt(2) for longest direct distance from (0,0) to (max,max) (because the map is square and can be divided 
+  into two 45-45-90 triangles) and divide for speed of sound for the max time it would take thunder to reach the player that's inside of the map boundaries */
+const max_time_of_thunder_pending = (max_coords * Math.sqrt(2)) / speed_of_sound;
+
+mx.message("max time thunder can pend: " + (max_time_of_thunder_pending.toFixed(3)).toString());
 
 function do_thunder_and_lightning() {
   weather_type = get_weather_type();
@@ -125,21 +139,20 @@ function do_thunder_and_lightning() {
 
   // get coords of lighning strike
   if (got_time_lighning && seconds >= time_lighning_strike) {
-    // Max and Min Coordinates of x and z where lightning can strike
-    var max, min;
-    min = -(1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale)));
-    max = (1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale))) + (terrain.size - 1);
 
-    lightning_coords.x = randomIntFromInterval(min, max);
-    lightning_coords.y = randomIntFromInterval(terrain.max, terrain.max * 2);
-    lightning_coords.z = randomIntFromInterval(min, max);
+    lightning_coords.x = randomIntFromInterval(min_coords, max_coords);
+    lightning_coords.z = randomIntFromInterval(min_coords, max_coords);
+
+    // get elevation of terrain at lightning strike coords x and z, and the height of the strike will be between the elevation and double the height of the elevation
+    var height = mx.get_elevation(lightning_coords.x, lightning_coords.z);
+    lightning_coords.y = randomIntFromInterval(height, height * 2);
 
     // TODO: Lightning Animations
     mx.message("Lightning Strike!");
     mx.message("Lightning Strike Coords: X - " + (lightning_coords.x).toString() + " Y - " + (lightning_coords.y).toString() + " Z - " + (lightning_coords.z).toString());
 
     // wait at least delay seconds for another lightning strike
-    time_for_another_lightning = time_lighning_strike + delay;
+    time_for_another_lightning = time_lighning_strike + max_time_of_thunder_pending;
     thunder_pending = true;
     got_time_lighning = false;
   }
