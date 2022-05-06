@@ -45,7 +45,7 @@ const heavy_thunder_directories = [
   "@" + track_folder_name + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
 ];
 
-const weather_types = [
+const weather_types_arr = [
   "clear", "light-rain", "rain", "heavy-rain",
   "light-thunder-no-rain", "light-thunder-rain", "light-thunder-heavy-rain",
   "med-thunder-no-rain", "med-thunder-rain", "med-thunder-heavy-rain",
@@ -55,7 +55,7 @@ const weather_types = [
 const first_lap_length = mx.first_lap_length;
 const normal_lap_length = mx.normal_lap_length;
 
-var g_running_order = mx.get_running_order();
+var g_running_order;
 
 set_up_weather_sounds();
 
@@ -110,9 +110,9 @@ var lightning_coords = {
 };
 var type_of_thunder_playing;
 var thunder_sound_index = 0;
+var time_for_another_lightning = 10;
 // speed of sound in ft/s
 const speed_of_sound = 1117.2;
-const time_for_another_lightning = 10;
 const base_thunder_vol = 50;
 
 // multiplied by the size of the map, it's where the lightning can strike outside the map
@@ -238,10 +238,11 @@ function get_weather_type() {
 
     if (r.length <= 1) {
       for (var i = 0; i < min_weather_types; i++)
-        weather_indices_for_session[i] = randomIntFromInterval(0, weather_types.length - 1);
-    } else {
+        weather_indices_for_session[i] = randomIntFromInterval(0, weather_types_arr.length - 1);
+    }
+    else {
       for (var i = 0; i < r.length; i++) {
-        weather_indices_for_session[i] = (r[i].slot % weather_types.length);
+        weather_indices_for_session[i] = (r[i].slot % weather_types_arr.length);
       }
 
       // if we have less than the number of minimum weather types scheduled
@@ -254,7 +255,7 @@ function get_weather_type() {
 
         for (var i = (original_arr_length - 1); i < (original_arr_length * times_to_dupe_array); i++) {
           // if we have one rider pick a random number, otherwise try to get a 'random' number that all clients will share
-          weather_indices_for_session[i] = ((r[j].slot + (dupe_iterations + 1)) % weather_types.length);
+          weather_indices_for_session[i] = ((r[j].slot + (dupe_iterations + 1)) % weather_types_arr.length);
           // if we reached the end of the running order reset j and increment the number of times we've duped the array
           j++;
           if (j >= original_arr_length) {
@@ -280,10 +281,10 @@ function get_weather_type() {
       else num = mx.get_running_order_slot(0);
       duration_of_weather_type = ((num % normal_lap_length) + 4) * (2 * normal_lap_length / 3);
     }
-    mx.message("weather type changed to: " + weather_types[weather_indices_for_session[weather_type_index]]);
+    mx.message("weather type changed to: " + weather_types_arr[weather_indices_for_session[weather_type_index]]);
     mx.message("duration of new weather: " + duration_of_weather_type.toString() + "s");
   }
-  return weather_types[weather_indices_for_session[weather_type_index]];
+  return weather_types_arr[weather_indices_for_session[weather_type_index]];
 }
 
 function frame_handler(seconds) {
