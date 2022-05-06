@@ -52,6 +52,11 @@ const weather_types = [
   "heavy-thunder-rain", "heavy-thunder-heavy-rain"
 ];
 
+const first_lap_length = mx.first_lap_length;
+const normal_lap_length = mx.normal_lap_length;
+
+var g_running_order = mx.get_running_order();
+
 set_up_weather_sounds();
 
 /*
@@ -96,7 +101,7 @@ function updateCamPosition() {
 
 var got_time_lighning = false;
 var time_lighning_strike;
-var weather_type;
+var current_weather_type;
 var thunder_pending = false;
 var lightning_coords = {
   x: 0,
@@ -118,15 +123,15 @@ const map_size_for_lightning = 3;
 const min_coords = -(1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale)));
 const max_coords = (1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale))) + (terrain.size - 1);
 
-/* get the max coordinate of lightning outside map, multiple by sqrt(2) for longest direct distance from (0,0) to (max,max) (because the map is square and can be divided 
+/* get the max coordinate of lightning outside map, multiple by sqrt(2) for longest distance from (0,0) to (max,max) (because the map is square and can be divided 
   into two 45-45-90 triangles) and divide for speed of sound for the max time it would take thunder to reach the player that's inside of the map boundaries */
 const max_time_of_thunder_pending = (max_coords * Math.sqrt(2)) / speed_of_sound;
 
 mx.message("max time thunder can pend: " + (max_time_of_thunder_pending.toFixed(3)).toString());
 
 function do_thunder_and_lightning() {
-  weather_type = get_weather_type();
-  if (!weather_type.includes("thunder")) return;
+  current_weather_type = get_weather_type();
+  if (!current_weather_type.includes("thunder")) return;
 
   var seconds = mx.seconds;
 
@@ -218,18 +223,73 @@ function play_thunder_sound(arr, vol) {
   mx.start_sound(arr[thunder_sound_index]);
 }
 
+var weather_type_index = -1;
+var weather_indices_for_session = [];
+
+var duration_of_weather_type = 0;
+var initialized_weather_for_session = false;
+const min_weather_types = 10;
+var dupe_iterations = 0;
+/* Weather should be the same for every client, but different for each session, so we will use the players slot numbers from the running order,
+    which changes at the beginning of each session, but is a constant for all players as the basis for creating what weather types to choose */
 function get_weather_type() {
-  return "thunder-rain";
+  if (!initialized_weather_for_session) {
+    var r = g_running_order;
+
+    if (r.length <= 1) {
+      for (var i = 0; i < min_weather_types; i++)
+        weather_indices_for_session[i] = randomIntFromInterval(0, weather_types.length - 1);
+    } else {
+      for (var i = 0; i < r.length; i++) {
+        weather_indices_for_session[i] = (r[i].slot % weather_types.length);
+      }
+
+      // if we have less than the number of minimum weather types scheduled
+      if (weather_indices_for_session.length < min_weather_types) {
+        // increase the size of the weather for sessions so it has at least min weather types
+        var times_to_dupe_array = Math.ceil(min_weather_types / weather_indices_for_session.length);
+        var j = 0;
+        // hold our original array's length
+        var original_arr_length = weather_indices_for_session.length;
+
+        for (var i = (original_arr_length - 1); i < (original_arr_length * times_to_dupe_array); i++) {
+          // if we have one rider pick a random number, otherwise try to get a 'random' number that all clients will share
+          weather_indices_for_session[i] = ((r[j].slot + (dupe_iterations + 1)) % weather_types.length);
+          // if we reached the end of the running order reset j and increment the number of times we've duped the array
+          j++;
+          if (j >= original_arr_length) {
+            dupe_iterations++;
+            j = 0;
+          }
+        }
+      }
+    }
+    initialized_weather_for_session = true;
+  }
+  if (mx.seconds >= duration_of_weather_type) {
+    weather_type_index++;
+    
+    // if we reach the end of the weather array, reset the index to the beginning
+    if (weather_type_index == weather_indices_for_session.length - 1) weather_type_index = 0;
+    // if we have one rider pick a random time between 1-6 mins, otherwise get a 'random' number that all clients will share
+    if (g_running_order.length == 1) duration_of_weather_type = randomIntFromInterval(60, 360);
+    else {
+      var num;
+      // if first's timing gate is greater than zero make the number the running order position, otherwise make it first's slot
+      if (mx.get_running_order_position(0) > 0) num = mx.get_running_order_position(0);
+      else num = mx.get_running_order_slot(0);
+      duration_of_weather_type = ((num % normal_lap_length) + 4) * (2 * normal_lap_length / 3);
+    }
+    mx.message("weather type changed to: " + weather_types[weather_indices_for_session[weather_type_index]]);
+    mx.message("duration of new weather: " + duration_of_weather_type.toString() + "s");
+  }
+  return weather_types[weather_indices_for_session[weather_type_index]];
 }
 
 function frame_handler(seconds) {
+  g_running_order = mx.get_running_order();
   updateCamPosition();
-  try {
-    do_thunder_and_lightning();
-  }
-  catch (e) {
-    mx.message("Error: " + e);
-  }
+  do_thunder_and_lightning();
   frame_handler_prev(seconds);
 }
 
