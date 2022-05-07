@@ -12,7 +12,15 @@ var rain_sounds = [];
 const rain_sound_directories = [
   "@" + track_folder_name + "/sounds/weather/rain/rain.raw",
   "@" + track_folder_name + "/sounds/weather/rain/rain2.raw",
+  // temporary repeat holder for now
+  "@" + track_folder_name + "/sounds/weather/rain/rain.raw"
 ];
+
+/* Can add multiple rain sound variants for light, medium, and heavy rain variants if wanted. 
+    Just make sure to change the indices at which they start and end. */
+const light_rain_sound_indices = {start: 0, end: 0};
+const med_rain_sound_indices = {start: 1, end: 1};
+const heavy_rain_sound_indexes = {start: 2, end: 2};
 
 // Distant ambient thunder sounds
 var distant_thunder = [];
@@ -47,9 +55,9 @@ const heavy_thunder_directories = [
 
 const weather_types_arr = [
   "clear", "light-rain", "rain", "heavy-rain",
-  "light-thunder-no-rain", "light-thunder-rain", "light-thunder-heavy-rain",
-  "med-thunder-no-rain", "med-thunder-rain", "med-thunder-heavy-rain",
-  "heavy-thunder-rain", "heavy-thunder-heavy-rain"
+  "light-thunder-no-rain", "light-thunder-light-rain", "light-thunder-med-rain", "light-thunder-heavy-rain",
+  "med-thunder-no-rain", "med-thunder-light-rain", "med-thunder-med-rain", "med-thunder-heavy-rain",
+  "heavy-thunder-med-rain", "heavy-thunder-heavy-rain"
 ];
 
 const first_lap_length = mx.first_lap_length;
@@ -64,13 +72,10 @@ Initialize sounds for later use.
 */
 function set_up_weather_sounds() {
 
-  // Right now only set up and play a base rain sound.  We can set up rain to play with weather types later.
   add_sound(rain_sounds, rain_sound_directories);
-  mx.set_sound_vol(rain_sounds[0], 5);
-  mx.set_sound_loop(rain_sounds[0], 1);
-  mx.start_sound(rain_sounds[0]);
+  set_rain_volumes();
 
-  // Just adding the sounds into the game, we will add volumes later
+  // Just add the sounds into game, we will change volumes later
   add_sound(distant_thunder, distant_thunder_directories);
   add_sound(thunder_sounds, thunder_sound_directories);
   add_sound(heavy_thunder_sounds, heavy_thunder_directories);
@@ -86,6 +91,18 @@ function add_sound(arr, directory) {
   }
 }
 
+// set the volumes depending on what rain type the sound is
+function set_rain_volumes() {
+  for (var i = 0; i < rain_sounds.length; i++) {
+    var vol = 0;
+    if (light_rain_sound_indices.start <= i <= light_rain_sound_indices.end) vol = 1;
+    if (med_rain_sound_indices.start <= i <= med_rain_sound_indices.end) vol = 2;
+    if (heavy_rain_sound_indexes.start <= i <= heavy_rain_sound_indexes.end) vol = 4;
+    mx.set_sound_vol(rain_sounds[i], vol);
+    mx.set_sound_loop(rain_sounds[i], 1);
+  }
+}
+
 // Camera Position Array holds position of camera in 3 element array [x,y,z]
 // Camera Rotation Matrix holds rotation of camera in a 3x3 matrix stored as a 9 element array.
 var cam_pos_arr = [], cam_rotation_matrix = [];
@@ -93,9 +110,6 @@ var cam_pos_arr = [], cam_rotation_matrix = [];
 function updateCamPosition() {
   // stores camera location into the cam_pos_arr and cam_rotation_matrix array variables
   mx.get_camera_location(cam_pos_arr, cam_rotation_matrix);
-
-	// Rain sound position
-	mx.set_sound_pos(rain_sounds[0], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
 }
 
 
@@ -113,13 +127,13 @@ var thunder_sound_index = 0;
 var time_for_another_lightning = 10;
 // speed of sound in ft/s
 const speed_of_sound = 1117.2;
-const base_thunder_vol = 50;
+const base_thunder_vol = 10;
 
 // multiplied by the size of the map, it's where the lightning can strike outside the map
 // We will allow lightning to happen outside the map at 3x scale
 const map_size_for_lightning = 3;
 
-// Max and Min Coordinates of x and z where lightning can strike
+// Max and Min Coordinates of x and z where lightning can strike, algorithm keeps original center point constant.
 const min_coords = -(1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale)));
 const max_coords = (1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale))) + (terrain.size - 1);
 
@@ -179,7 +193,7 @@ function do_thunder_and_lightning() {
     if (distance - distance_traveled <= 0) {
       // time it took for the thunder to reach the rider from the lightning origin
       var time = seconds - time_lighning_strike;
-      var vol = Math.ceil(base_thunder_vol / (1/50 * time));
+      var vol = Math.ceil(base_thunder_vol / (1/4 * time));
   
       mx.message("Thunder sound " + (time.toFixed(3)).toString() + " seconds after lightning!");
   
@@ -248,17 +262,17 @@ function get_weather_type() {
       // if we have less than the number of minimum weather types scheduled
       if (weather_indices_for_session.length < min_weather_types) {
         // increase the size of the weather for sessions so it has at least min weather types
-        var times_to_dupe_array = Math.ceil(min_weather_types / weather_indices_for_session.length);
-        var j = 0;
+        const times_to_dupe_array = Math.ceil(min_weather_types / weather_indices_for_session.length);
         // hold our original array's length
-        var original_arr_length = weather_indices_for_session.length;
+        const original_arr_length = weather_indices_for_session.length;
 
+        var j = 0;
         for (var i = (original_arr_length - 1); i < (original_arr_length * times_to_dupe_array); i++) {
           // if we have one rider pick a random number, otherwise try to get a 'random' number that all clients will share
           weather_indices_for_session[i] = ((r[j].slot + (dupe_iterations + 1)) % weather_types_arr.length);
           // if we reached the end of the running order reset j and increment the number of times we've duped the array
           j++;
-          if (j >= original_arr_length) {
+          if (j == original_arr_length) {
             dupe_iterations++;
             j = 0;
           }
@@ -287,10 +301,46 @@ function get_weather_type() {
   return weather_types_arr[weather_indices_for_session[weather_type_index]];
 }
 
+var current_rain_sound = 0;
+var is_raining = false;
+function do_rain() {
+  // If the current weather is no rain or clear
+  if ((current_weather_type.includes("no-rain") || current_weather_type.includes("clear")) && is_raining) {
+   
+    // TODO: Stop rain animation
+
+    mx.stop_sound(rain_sounds[current_rain_sound]);
+    is_raining = false;
+  }
+  // If the current weather is rain and it is not raining
+  else if (!is_raining) {
+    // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
+    if (current_weather_type.includes("light-rain"))
+      current_rain_sound = randomIntFromInterval(light_rain_sound_indices.start, light_rain_sound_indices.end);
+    else if (current_weather_type.includes("med-rain"))
+      current_rain_sound = randomIntFromInterval(med_rain_sound_indices.start, med_rain_sound_indices.end);
+    else if (current_weather_type.includes("heavy-rain")) 
+      current_rain_sound = randomIntFromInterval(heavy_rain_sound_indexes.start, heavy_rain_sound_indexes.end);
+    else mx.message("Error: Weather type Unrecognized");
+
+    // TODO: Start rain animation
+
+    mx.start_sound(rain_sounds[current_rain_sound]);
+    is_raining = true;
+  }
+
+  // If it's raining update the sound position for the rain to the camera position
+  if (is_raining)
+    mx.set_sound_pos(rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+
+  return;
+}
+
 function frame_handler(seconds) {
   g_running_order = mx.get_running_order();
   updateCamPosition();
   do_thunder_and_lightning();
+  do_rain();
   frame_handler_prev(seconds);
 }
 
