@@ -223,17 +223,9 @@ function do_thunder_and_lightning() {
     }
   }
   else if (type_of_thunder_playing) {
-      switch (type_of_thunder_playing) {
-        case "heavy":
-          mx.set_sound_pos(heavy_thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-          break;
-        case "med":
-          mx.set_sound_pos(thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-          break;
-        case "distant":
-          mx.set_sound_pos(distant_thunder[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-          break;
-    }
+    if (type_of_thunder_playing == "heavy") mx.set_sound_pos(heavy_thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    else if (type_of_thunder_playing == "med") mx.set_sound_pos(thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    else if (type_of_thunder_playing == "distant") mx.set_sound_pos(distant_thunder[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
   }  
 }
 
@@ -317,17 +309,10 @@ function do_rain() {
    
     // TODO: Stop rain animation
 
-    switch (rain_type) {
-      case "light":
-        mx.stop_sound(light_rain_sounds[current_rain_sound]);
-        break;
-      case "med":
-        mx.stop_sound(med_rain_sounds[current_rain_sound]);
-        break;
-      case "heavy":
-        mx.stop_sound(heavy_rain_sounds[current_rain_sound]);
-        break;
-    }
+    if (rain_type == "light") mx.stop_sound(light_rain_sounds[current_rain_sound]);
+    else if (rain_type == "med") mx.stop_sound(med_rain_sounds[current_rain_sound]);
+    else if (rain_type == "heavy") mx.stop_sound(heavy_rain_sounds[current_rain_sound]);
+
     is_raining = false;
   }
   // If the current weather is rain and it is not raining
@@ -360,17 +345,9 @@ function do_rain() {
 
   // If it's raining update the sound position for the rain to the camera position
   if (is_raining) {
-    switch (rain_type) {
-      case "light":
-        mx.set_sound_pos(light_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-        break;
-      case "med":
-        mx.set_sound_pos(med_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-        break;
-      case "heavy":
-        mx.set_sound_pos(heavy_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-        break;
-    }
+    if (rain_type == "light") mx.set_sound_pos(light_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    else if (rain_type == "med") mx.set_sound_pos(med_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    else if (rain_type == "heavy") mx.set_sound_pos(heavy_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
   }
 }
 
