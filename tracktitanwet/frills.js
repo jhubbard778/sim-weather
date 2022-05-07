@@ -8,19 +8,20 @@ const terrain = {
 };
 
 // Different rain sounds depending on weather type.
-var rain_sounds = [];
-const rain_sound_directories = [
-  "@" + track_folder_name + "/sounds/weather/rain/rain.raw",
-  "@" + track_folder_name + "/sounds/weather/rain/rain2.raw",
-  // temporary repeat holder for now
+var light_rain_sounds = [];
+const light_rain_sound_directories = [
+  "@" + track_folder_name + "/sounds/weather/rain/rain2.raw"
+];
+
+var med_rain_sounds = [];
+const med_rain_sound_directories = [
   "@" + track_folder_name + "/sounds/weather/rain/rain.raw"
 ];
 
-/* Can add multiple rain sound variants for light, medium, and heavy rain variants if wanted. 
-    Just make sure to change the indices at which they start and end. */
-const light_rain_sound_indices = {start: 0, end: 0};
-const med_rain_sound_indices = {start: 1, end: 1};
-const heavy_rain_sound_indexes = {start: 2, end: 2};
+var heavy_rain_sounds = [];
+const heavy_rain_sound_directories = [
+  "@" + track_folder_name + "/sounds/weather/rain/rain.raw"
+];
 
 // Distant ambient thunder sounds
 var distant_thunder = [];
@@ -72,7 +73,9 @@ Initialize sounds for later use.
 */
 function set_up_weather_sounds() {
 
-  add_sound(rain_sounds, rain_sound_directories);
+  add_sound(light_rain_sounds, light_rain_sound_directories);
+  add_sound(med_rain_sounds, med_rain_sound_directories);
+  add_sound(heavy_rain_sounds, heavy_rain_sound_directories);
   set_rain_volumes();
 
   // Just add the sounds into game, we will change volumes later
@@ -93,13 +96,17 @@ function add_sound(arr, directory) {
 
 // set the volumes depending on what rain type the sound is
 function set_rain_volumes() {
-  for (var i = 0; i < rain_sounds.length; i++) {
-    var vol = 0;
-    if (light_rain_sound_indices.start <= i <= light_rain_sound_indices.end) vol = 1;
-    if (med_rain_sound_indices.start <= i <= med_rain_sound_indices.end) vol = 2;
-    if (heavy_rain_sound_indexes.start <= i <= heavy_rain_sound_indexes.end) vol = 4;
-    mx.set_sound_vol(rain_sounds[i], vol);
-    mx.set_sound_loop(rain_sounds[i], 1);
+  for (var i = 0; i < light_rain_sounds.length; i++) {
+    mx.set_sound_vol(light_rain_sounds[i], 1);
+    mx.set_sound_loop(light_rain_sounds[i], 1);
+  }
+  for (var i = 0; i < med_rain_sounds.length; i++) {
+    mx.set_sound_vol(med_rain_sounds[i], 2);
+    mx.set_sound_loop(med_rain_sounds[i], 1);
+  }
+  for (var i = 0; i < heavy_rain_sounds.length; i++) {
+    mx.set_sound_vol(heavy_rain_sounds[i], 4);
+    mx.set_sound_loop(heavy_rain_sounds[i], 1);
   }
 }
 
@@ -303,37 +310,68 @@ function get_weather_type() {
 
 var current_rain_sound = 0;
 var is_raining = false;
+var rain_type;
 function do_rain() {
   // If the current weather is no rain or clear
   if ((current_weather_type.includes("no-rain") || current_weather_type.includes("clear")) && is_raining) {
    
     // TODO: Stop rain animation
 
-    mx.stop_sound(rain_sounds[current_rain_sound]);
+    switch (rain_type) {
+      case "light":
+        mx.stop_sound(light_rain_sounds[current_rain_sound]);
+        break;
+      case "med":
+        mx.stop_sound(med_rain_sounds[current_rain_sound]);
+        break;
+      case "heavy":
+        mx.stop_sound(heavy_rain_sounds[current_rain_sound]);
+        break;
+    }
     is_raining = false;
   }
   // If the current weather is rain and it is not raining
   else if (!is_raining) {
     // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
-    if (current_weather_type.includes("light-rain"))
-      current_rain_sound = randomIntFromInterval(light_rain_sound_indices.start, light_rain_sound_indices.end);
-    else if (current_weather_type.includes("med-rain"))
-      current_rain_sound = randomIntFromInterval(med_rain_sound_indices.start, med_rain_sound_indices.end);
-    else if (current_weather_type.includes("heavy-rain")) 
-      current_rain_sound = randomIntFromInterval(heavy_rain_sound_indexes.start, heavy_rain_sound_indexes.end);
-    else mx.message("Error: Weather type Unrecognized");
+    if (current_weather_type.includes("light-rain")) {
+      current_rain_sound = randomIntFromInterval(0, light_rain_sounds.length - 1);
+      rain_type = "light";
+      mx.start_sound(light_rain_sounds[current_rain_sound]);
+    }  
+    else if (current_weather_type.includes("med-rain")) {
+      current_rain_sound = randomIntFromInterval(0, med_rain_sounds.length - 1);
+      rain_type = "med";
+      mx.start_sound(med_rain_sounds[current_rain_sound]);
+    }
+    else if (current_weather_type.includes("heavy-rain")) {
+      current_rain_sound = randomIntFromInterval(0, heavy_rain_sounds.length - 1);
+      rain_type = "heavy";
+      mx.start_sound(heavy_rain_sounds[current_rain_sound]);
+    }
+    else {
+      mx.message("Error: Weather type Unrecognized");
+      return;
+    }
 
     // TODO: Start rain animation
-
-    mx.start_sound(rain_sounds[current_rain_sound]);
+   
     is_raining = true;
   }
 
   // If it's raining update the sound position for the rain to the camera position
-  if (is_raining)
-    mx.set_sound_pos(rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-
-  return;
+  if (is_raining) {
+    switch (rain_type) {
+      case "light":
+        mx.set_sound_pos(light_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+        break;
+      case "med":
+        mx.set_sound_pos(med_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+        break;
+      case "heavy":
+        mx.set_sound_pos(heavy_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+        break;
+    }
+  }
 }
 
 function frame_handler(seconds) {
