@@ -55,7 +55,7 @@ const heavy_thunder_directories = [
 ];
 
 const weather_types_arr = [
-  "clear", "light-rain", "rain", "heavy-rain",
+  "clear", "light-rain", "med-rain", "heavy-rain",
   "light-thunder-no-rain", "light-thunder-light-rain", "light-thunder-med-rain", "light-thunder-heavy-rain",
   "med-thunder-no-rain", "med-thunder-light-rain", "med-thunder-med-rain", "med-thunder-heavy-rain",
   "heavy-thunder-med-rain", "heavy-thunder-heavy-rain"
@@ -76,7 +76,7 @@ function set_up_weather_sounds() {
   add_sound(light_rain_sounds, light_rain_sound_directories);
   add_sound(med_rain_sounds, med_rain_sound_directories);
   add_sound(heavy_rain_sounds, heavy_rain_sound_directories);
-  set_rain_volumes();
+  set_rain_loops();
 
   // Just add the sounds into game, we will change volumes later
   add_sound(distant_thunder, distant_thunder_directories);
@@ -94,20 +94,25 @@ function add_sound(arr, directory) {
   }
 }
 
-// set the volumes depending on what rain type the sound is
-function set_rain_volumes() {
-  for (var i = 0; i < light_rain_sounds.length; i++) {
-    mx.set_sound_vol(light_rain_sounds[i], 1);
-    mx.set_sound_loop(light_rain_sounds[i], 1);
+const light_rain_vol = 0.5;
+const med_rain_vol = 2;
+const heavy_rain_vol = 4;
+// set the loops up, the variables above will be used for fade-in-out volumes
+function set_rain_loops() {
+  for (var i = 0; i < light_rain_sounds.length; i++)  mx.set_sound_loop(light_rain_sounds[i], 1);
+  for (var i = 0; i < med_rain_sounds.length; i++) mx.set_sound_loop(med_rain_sounds[i], 1);
+  for (var i = 0; i < heavy_rain_sounds.length; i++) mx.set_sound_loop(heavy_rain_sounds[i], 1);
+}
+
+function determine_if_server() {
+  var num_players = 0;
+  for (var i = 0; i <g_running_order.length; i++) {
+    if (mx.get_rider_name(g_running_order[i].slot) != "Roborider") {
+      num_players++;
+      if (num_players > 1) return true;
+    }
   }
-  for (var i = 0; i < med_rain_sounds.length; i++) {
-    mx.set_sound_vol(med_rain_sounds[i], 2);
-    mx.set_sound_loop(med_rain_sounds[i], 1);
-  }
-  for (var i = 0; i < heavy_rain_sounds.length; i++) {
-    mx.set_sound_vol(heavy_rain_sounds[i], 4);
-    mx.set_sound_loop(heavy_rain_sounds[i], 1);
-  }
+  return false;
 }
 
 // Camera Position Array holds position of camera in 3 element array [x,y,z]
@@ -152,7 +157,14 @@ mx.message("max time thunder can pend: " + (max_time_of_thunder_pending.toFixed(
 
 function do_thunder_and_lightning() {
   current_weather_type = get_weather_type();
-  if (!current_weather_type.includes("thunder")) return;
+  if (!current_weather_type.includes("thunder")) {
+    // if we had a pending lightning strike cancel it
+    if (time_lighning_strike) {
+      time_lighning_strike = undefined;
+      got_time_lighning = false;
+    }
+    return;
+  }
 
   var seconds = mx.seconds;
 
@@ -160,7 +172,6 @@ function do_thunder_and_lightning() {
   if (!got_time_lighning && seconds >= time_for_another_lightning) {
     time_lighning_strike = randomNumFromInterval(0, 60) + seconds;
     got_time_lighning = true;
-    playedthunder = false;
   }
 
   // get coords of lighning strike
@@ -240,16 +251,18 @@ var weather_type_index = -1;
 var weather_indices_for_session = [];
 
 var duration_of_weather_type = 0;
+var time_weather_started = 0;
 var initialized_weather_for_session = false;
 const min_weather_types = 10;
 var dupe_iterations = 0;
+var is_server_session = false;
 /* Weather should be the same for every client, but different for each session, so we will use the players slot numbers from the running order,
     which changes at the beginning of each session, but is a constant for all players as the basis for creating what weather types to choose */
 function get_weather_type() {
   if (!initialized_weather_for_session) {
     var r = g_running_order;
-
-    if (r.length <= 1) {
+    is_server_session = determine_if_server();
+    if (r.length <= 1 || !is_server_session) {
       for (var i = 0; i < min_weather_types; i++)
         weather_indices_for_session[i] = randomIntFromInterval(0, weather_types_arr.length - 1);
     }
@@ -280,13 +293,14 @@ function get_weather_type() {
     }
     initialized_weather_for_session = true;
   }
-  if (mx.seconds >= duration_of_weather_type) {
+  if (mx.seconds >= duration_of_weather_type + time_weather_started) {
     weather_type_index++;
-    
+    // set the time that the new weather started
+    time_weather_started = mx.seconds;
     // if we reach the end of the weather array, reset the index to the beginning
     if (weather_type_index == weather_indices_for_session.length - 1) weather_type_index = 0;
     // if we have one rider pick a random time between 1-6 mins, otherwise get a 'random' number that all clients will share
-    if (g_running_order.length == 1) duration_of_weather_type = randomIntFromInterval(60, 360);
+    if (g_running_order.length == 1 || !is_server_session) duration_of_weather_type = randomIntFromInterval(60, 360);
     else {
       var num;
       // if first's timing gate is greater than zero make the number the running order position, otherwise make it first's slot
@@ -303,52 +317,243 @@ function get_weather_type() {
 var current_rain_sound = 0;
 var is_raining = false;
 var rain_type;
+
+// FADE IN VARIABLES
+var fade_in_rain_type;
+// holds either light, med, or heavy sound arr depending on rain type
+var fade_in_sound_arr;
+var current_fade_in_vol = 0;
+var target_fade_in_vol;
+// fade in time in seconds
+const fade_in_time = 8;
+var fade_in_vol_per_sec;
+
+// FADE OUT VARIABLES
+var fade_out_rain_type;
+// holds either light, med, or heavy sound arr depending on rain type
+var fade_out_sound_arr;
+var current_fade_out_vol;
+var start_fade_out_vol;
+// ## Target Fade Out is Constant 0 ##
+// fade out time in seconds
+const fade_out_time = 8;
+var fade_out_vol_per_sec;
+
+// Hold the time at which we start a fade
+var time_fade_started;
+
+// booleans to hold fade values
+var fade_happening = false;
+var fade_in_done = true;
+var fade_out_done = true;
+
+// Hold the previous rain type so we can still move the position
+var prev_rain_type;
+var prev_rain_index;
+
 function do_rain() {
-  // If the current weather is no rain or clear
+  // If the current weather is no rain or clear and it's raining
   if ((current_weather_type.includes("no-rain") || current_weather_type.includes("clear")) && is_raining) {
    
     // TODO: Stop rain animation
 
-    if (rain_type == "light") mx.stop_sound(light_rain_sounds[current_rain_sound]);
-    else if (rain_type == "med") mx.stop_sound(med_rain_sounds[current_rain_sound]);
-    else if (rain_type == "heavy") mx.stop_sound(heavy_rain_sounds[current_rain_sound]);
+    // set the fade out start volume
+    get_fade_volumes("out");
+    fade_out_vol_per_sec = (0 - start_fade_out_vol) / fade_out_time;
 
+    // previous rain type and sound index
+    prev_rain_type = rain_type;
+    prev_rain_index = current_rain_sound;
+
+    // Reinitialize rain type and index
+    rain_type = undefined;
+    current_rain_sound = undefined;
+
+    // set the fade out rain time and the current volume we're starting at fading to zero
+    fade_out_rain_type = prev_rain_type;
+
+    // set the time we're starting the fade in
+    time_fade_started = mx.seconds;
+
+    // say that we're fading, and that the fade out is not done
+    fade_happening = true;
+    fade_out_done = false;
+    
     is_raining = false;
   }
   // If the current weather is rain and it is not raining
-  else if (!is_raining) {
+  else if (!is_raining && !current_weather_type.includes("no-rain") && !current_weather_type.includes("clear")) {
     // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
-    if (current_weather_type.includes("light-rain")) {
-      current_rain_sound = randomIntFromInterval(0, light_rain_sounds.length - 1);
-      rain_type = "light";
-      mx.start_sound(light_rain_sounds[current_rain_sound]);
-    }  
-    else if (current_weather_type.includes("med-rain")) {
-      current_rain_sound = randomIntFromInterval(0, med_rain_sounds.length - 1);
-      rain_type = "med";
-      mx.start_sound(med_rain_sounds[current_rain_sound]);
-    }
-    else if (current_weather_type.includes("heavy-rain")) {
-      current_rain_sound = randomIntFromInterval(0, heavy_rain_sounds.length - 1);
-      rain_type = "heavy";
-      mx.start_sound(heavy_rain_sounds[current_rain_sound]);
-    }
+    if (current_weather_type.includes("light-rain")) start_rain(light_rain_sounds, "light");
+    else if (current_weather_type.includes("med-rain")) start_rain(med_rain_sounds, "med");
+    else if (current_weather_type.includes("heavy-rain")) start_rain(heavy_rain_sounds, "heavy");
     else {
       mx.message("Error: Weather type Unrecognized");
+      is_raining = true;
       return;
     }
-
+    
     // TODO: Start rain animation
-   
+  
+    // set the rain fade in type, get the volume we're fading into
+    fade_in_rain_type = rain_type;
+    current_fade_in_vol = 0;
+    get_fade_volumes("in");
+    fade_in_vol_per_sec = (target_fade_in_vol - current_fade_in_vol) / fade_in_time;
+
+    // get time we're starting the fade
+    time_fade_started = mx.seconds;
+
+    // say that we're fading, and that the fade in is not done
+    fade_happening = true;
+    fade_in_done = false;
     is_raining = true;
   }
 
-  // If it's raining update the sound position for the rain to the camera position
   if (is_raining) {
-    if (rain_type == "light") mx.set_sound_pos(light_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-    else if (rain_type == "med") mx.set_sound_pos(med_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-    else if (rain_type == "heavy") mx.set_sound_pos(heavy_rain_sounds[current_rain_sound], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    // if we changed rain types
+    if (current_weather_type.includes("light-rain") && rain_type !== "light") change_rain_type("light");
+    else if (current_weather_type.includes("med-rain") && rain_type !== "med") change_rain_type("med");
+    else if (current_weather_type.includes("heavy-rain") && rain_type !== "heavy") change_rain_type("heavy");
+
+    // if it's raining we update the current rain sound position
+    move_rain_pos(rain_type, current_rain_sound);
   }
+
+  if (fade_happening) {
+    // store time since fade started
+    var t = mx.seconds - time_fade_started;
+
+    if (!fade_in_done) {
+      // Calculate the current volume and set it
+      current_fade_in_vol = (fade_in_vol_per_sec * t);
+      set_rain_sound_vol(rain_type, current_rain_sound, current_fade_in_vol);
+
+      // If our current volume is greater than or equal to the target volume
+      if (current_fade_in_vol >= target_fade_in_vol) {
+        // set the sound to the target volume just in case for demos
+        set_rain_sound_vol(rain_type, current_rain_sound, target_fade_in_vol);
+
+        // We're done with these variables, leave them undefined
+        fade_in_sound_arr = undefined;
+        current_fade_in_vol = undefined;
+        target_fade_in_vol = undefined;
+        fade_in_rain_type = undefined;
+        fade_in_vol_per_sec = undefined;
+
+        // We're done fading in
+        fade_in_done = true;
+      }
+    }
+    if (!fade_out_done) {
+      // If we have a fade out rain we still need to move it's position
+      move_rain_pos(prev_rain_type, prev_rain_index);
+
+      // Calculate the current volume and set it
+      current_fade_out_vol = start_fade_out_vol + (fade_out_vol_per_sec * t);
+      set_rain_sound_vol(prev_rain_type, prev_rain_index, current_fade_out_vol);
+
+      // If we've reached less than or equal to zero
+      if (current_fade_out_vol <= 0) {
+        // set the sound to the target volume just in case for demos
+        set_rain_sound_vol(prev_rain_type, prev_rain_index, 0);
+
+        // Stop the sound
+        stop_rain_sound(prev_rain_type, prev_rain_index);
+
+        // We're done with these variables for now, leave them undefined
+        prev_rain_type = undefined;
+        prev_rain_index = undefined;
+        fade_in_sound_arr = undefined;
+        fade_out_rain_type = undefined;
+        current_fade_out_vol = undefined;
+        start_fade_out_vol = undefined;
+        fade_out_vol_per_sec = undefined;
+
+        // We're done fading out
+        fade_out_done = true;
+      }
+    }
+    if (fade_in_done && fade_out_done) fade_happening = false;
+  }
+}
+
+function change_rain_type(new_rain_type) {
+
+  // get the fade out volume
+  get_fade_volumes("out");
+
+  // set the previous rain type, and the previous rain sound index
+  prev_rain_type = rain_type;
+  prev_rain_index = current_rain_sound;
+
+  // fade in rain type is the new rain type, fade out is previous rain type
+  fade_in_rain_type = new_rain_type;
+  fade_out_rain_type = prev_rain_type;
+
+  // reset rain type
+  rain_type = new_rain_type;
+  
+  // start a new rain sound for preparation of fading in
+  if (rain_type == "light") start_rain(light_rain_sounds, "light");
+  else if (rain_type == "med") start_rain(med_rain_sounds, "med");
+  else if (rain_type == "heavy") start_rain(heavy_rain_sounds, "heavy");
+
+  // get the fade in volume
+  get_fade_volumes("in");
+
+  // initialize current fade volume and vol/sec variables
+  current_fade_in_vol = 0;
+  fade_in_vol_per_sec = target_fade_in_vol / fade_in_time;
+  fade_out_vol_per_sec = (0 - start_fade_out_vol) / fade_out_time;
+
+  // get time fade starting
+  time_fade_started = mx.seconds;
+
+  fade_happening = true;
+  fade_in_done = false;
+  fade_out_done = false;
+}
+
+function start_rain(sound_arr, type) {
+  current_rain_sound = randomIntFromInterval(0, sound_arr.length - 1);
+  rain_type = type;
+
+  // initialize sound volume to zero and start it for the fade
+  mx.set_sound_vol(sound_arr[current_rain_sound], 0);
+  mx.start_sound(sound_arr[current_rain_sound]);
+}
+
+function get_fade_volumes(key) {
+  if (key === "in") {
+    if (rain_type == "light") target_fade_in_vol = light_rain_vol;
+    else if (rain_type == "med") target_fade_in_vol = med_rain_vol;
+    else if (rain_type == "heavy") target_fade_in_vol = heavy_rain_vol;
+  }
+  else if (key === "out")  {
+    if (rain_type == "light") start_fade_out_vol = light_rain_vol;
+    else if (rain_type == "med") start_fade_out_vol = med_rain_vol;
+    else if (rain_type == "heavy") start_fade_out_vol = heavy_rain_vol;
+  }
+  else mx.message("Error: key unrecognized");
+}
+
+function set_rain_sound_vol(type, index, vol) {
+  if (type == "light") mx.set_sound_vol(light_rain_sounds[index], vol);
+  else if (type == "med") mx.set_sound_vol(med_rain_sounds[index], vol);
+  else if (type == "heavy") mx.set_sound_vol(heavy_rain_sounds[index], vol);
+}
+
+function stop_rain_sound(type, index) {
+  if (type == "light") mx.stop_sound(light_rain_sounds[index]);
+  else if (type == "med") mx.stop_sound(med_rain_sounds[index]);
+  else if (type == "heavy") mx.stop_sound(heavy_rain_sounds[index]);
+}
+
+function move_rain_pos(type, index) {
+  if (type == "light") mx.set_sound_pos(light_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+  else if (type == "med") mx.set_sound_pos(med_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+  else if (type == "heavy") mx.set_sound_pos(heavy_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
 }
 
 function frame_handler(seconds) {
