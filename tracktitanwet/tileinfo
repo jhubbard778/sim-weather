@@ -655,8 +655,8 @@ erode_limit 1.0 1.35 1.35
 erode_limit 4.5 1.05 1.05
 erode_lateral_scale 0.25
 texture @WEObjectPack/rain/tiles/mudintoturns.ppm
-roost texture=@tracktitan/tiles/roost.png count=2 size=0.5 grow=8.0 drag=5 slow_speed=0.0 fast_speed=64.0 slow_angle=0.1 fast_angle=0.2 r=121 g=101 b=61 a=170 fade_r=0 fade_g=0 fade_b=0 fade_a=-128
-roost texture=@tracktitan/tiles/roost2.png count=2 size=0.5 grow=8.0 drag=5 slow_speed=0.0 fast_speed=64.0 slow_angle=0.1 fast_angle=0.2 r=147 g=119 b=53 a=170 fade_r=0 fade_g=0 fade_b=0 fade_a=-128
-roost texture=@tracktitan/tiles/darkroost.png count=2 size=0.5 grow=8 drag=5 slow_speed=0.0 fast_speed=64.0 slow_angle=0.1 fast_angle=0.2 r=99 g=78 b=39 a=128 fade_r=0 fade_g=0 fade_b=0 fade_a=0
-roost texture=@tracktitan/tiles/stones.png count=0.2 size=0.15 slip_threshold=2 grow=0 drag=5 slow_speed=0.0 fast_speed=64.0 vscale=1.2 slow_angle=1.5 fast_angle=0.3 r=180 g=180 b=180 a=255 fade_r=0 fade_g=0 fade_b=0 fade_a=0 randomize=15
+roost texture=@tracktitanwet/tiles/roost.png count=2 size=0.5 grow=8.0 drag=5 slow_speed=0.0 fast_speed=64.0 slow_angle=0.1 fast_angle=0.2 r=121 g=101 b=61 a=170 fade_r=0 fade_g=0 fade_b=0 fade_a=-128
+roost texture=@tracktitanwet/tiles/roost2.png count=2 size=0.5 grow=8.0 drag=5 slow_speed=0.0 fast_speed=64.0 slow_angle=0.1 fast_angle=0.2 r=147 g=119 b=53 a=170 fade_r=0 fade_g=0 fade_b=0 fade_a=-128
+roost texture=@tracktitanwet/tiles/darkroost.png count=2 size=0.5 grow=8 drag=5 slow_speed=0.0 fast_speed=64.0 slow_angle=0.1 fast_angle=0.2 r=99 g=78 b=39 a=128 fade_r=0 fade_g=0 fade_b=0 fade_a=0
+roost texture=@tracktitanwet/tiles/stones.png count=0.2 size=0.15 slip_threshold=2 grow=0 drag=5 slow_speed=0.0 fast_speed=64.0 vscale=1.2 slow_angle=1.5 fast_angle=0.3 r=180 g=180 b=180 a=255 fade_r=0 fade_g=0 fade_b=0 fade_a=0 randomize=15
 addtile
