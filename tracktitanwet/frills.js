@@ -234,9 +234,13 @@ function do_thunder_and_lightning() {
     }
   }
   else if (type_of_thunder_playing) {
-    if (type_of_thunder_playing == "heavy") mx.set_sound_pos(heavy_thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-    else if (type_of_thunder_playing == "med") mx.set_sound_pos(thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-    else if (type_of_thunder_playing == "distant") mx.set_sound_pos(distant_thunder[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    if (type_of_thunder_playing == "heavy") {
+      mx.set_sound_pos(heavy_thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    } else if (type_of_thunder_playing == "med") {
+      mx.set_sound_pos(thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    } else if (type_of_thunder_playing == "distant") {
+      mx.set_sound_pos(distant_thunder[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+    }
   }  
 }
 
@@ -304,8 +308,11 @@ function get_weather_type() {
     else {
       var num;
       // if first's timing gate is greater than zero make the number the running order position, otherwise make it first's slot
-      if (mx.get_running_order_position(0) > 0) num = mx.get_running_order_position(0);
-      else num = mx.get_running_order_slot(0);
+      if (mx.get_running_order_position(0) > 0) {
+        num = mx.get_running_order_position(0);
+      } else {
+        num = mx.get_running_order_slot(0);
+      }
       duration_of_weather_type = ((num % normal_lap_length) + 4) * (2 * normal_lap_length / 3);
     }
     mx.message("weather type changed to: " + weather_types_arr[weather_indices_for_session[weather_type_index]]);
@@ -354,8 +361,6 @@ var prev_rain_index;
 function do_rain() {
   // If the current weather is no rain or clear and it's raining
   if ((current_weather_type.includes("no-rain") || current_weather_type.includes("clear")) && is_raining) {
-   
-    // TODO: Stop rain animation
 
     // set the fade out start volume
     get_fade_volumes("out");
@@ -384,16 +389,17 @@ function do_rain() {
   // If the current weather is rain and it is not raining
   else if (!is_raining && !current_weather_type.includes("no-rain") && !current_weather_type.includes("clear")) {
     // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
-    if (current_weather_type.includes("light-rain")) start_rain(light_rain_sounds, "light");
-    else if (current_weather_type.includes("med-rain")) start_rain(med_rain_sounds, "med");
-    else if (current_weather_type.includes("heavy-rain")) start_rain(heavy_rain_sounds, "heavy");
-    else {
+    if (current_weather_type.includes("light-rain")) {
+      start_rain(light_rain_sounds, "light");
+    } else if (current_weather_type.includes("med-rain")) {
+      start_rain(med_rain_sounds, "med");
+    } else if (current_weather_type.includes("heavy-rain")) {
+      start_rain(heavy_rain_sounds, "heavy");
+    } else {
       mx.message("Error: Weather type Unrecognized");
       is_raining = true;
       return;
     }
-    
-    // TODO: Start rain animation
   
     // set the rain fade in type, get the volume we're fading into
     fade_in_rain_type = rain_type;
@@ -412,9 +418,13 @@ function do_rain() {
 
   if (is_raining) {
     // if we changed rain types
-    if (current_weather_type.includes("light-rain") && rain_type !== "light") change_rain_type("light");
-    else if (current_weather_type.includes("med-rain") && rain_type !== "med") change_rain_type("med");
-    else if (current_weather_type.includes("heavy-rain") && rain_type !== "heavy") change_rain_type("heavy");
+    if (current_weather_type.includes("light-rain") && rain_type !== "light") {
+      change_rain_type("light");
+    } else if (current_weather_type.includes("med-rain") && rain_type !== "med") {
+      change_rain_type("med");
+    } else if (current_weather_type.includes("heavy-rain") && rain_type !== "heavy") {
+      change_rain_type("heavy");
+    }
 
     // if it's raining we update the current rain sound position
     move_rain_pos(rain_type, current_rain_sound);
@@ -428,6 +438,8 @@ function do_rain() {
       // Calculate the current volume and set it
       current_fade_in_vol = (fade_in_vol_per_sec * t);
       set_rain_sound_vol(rain_type, current_rain_sound, current_fade_in_vol);
+
+      // TODO: Fade in rain animation
 
       // If our current volume is greater than or equal to the target volume
       if (current_fade_in_vol >= target_fade_in_vol) {
@@ -452,6 +464,8 @@ function do_rain() {
       // Calculate the current volume and set it
       current_fade_out_vol = start_fade_out_vol + (fade_out_vol_per_sec * t);
       set_rain_sound_vol(prev_rain_type, prev_rain_index, current_fade_out_vol);
+
+      // TODO: Fade out rain animation
 
       // If we've reached less than or equal to zero
       if (current_fade_out_vol <= 0) {
@@ -495,9 +509,13 @@ function change_rain_type(new_rain_type) {
   rain_type = new_rain_type;
   
   // start a new rain sound for preparation of fading in
-  if (rain_type == "light") start_rain(light_rain_sounds, "light");
-  else if (rain_type == "med") start_rain(med_rain_sounds, "med");
-  else if (rain_type == "heavy") start_rain(heavy_rain_sounds, "heavy");
+  if (rain_type === "light") {
+    start_rain(light_rain_sounds, "light");
+  } else if (rain_type === "med") {
+    start_rain(med_rain_sounds, "med");
+  } else if (rain_type === "heavy") {
+    start_rain(heavy_rain_sounds, "heavy");
+  }
 
   // get the fade in volume
   get_fade_volumes("in");
@@ -526,34 +544,54 @@ function start_rain(sound_arr, type) {
 
 function get_fade_volumes(key) {
   if (key === "in") {
-    if (rain_type == "light") target_fade_in_vol = light_rain_vol;
-    else if (rain_type == "med") target_fade_in_vol = med_rain_vol;
-    else if (rain_type == "heavy") target_fade_in_vol = heavy_rain_vol;
+    if (rain_type === "light") {
+      target_fade_in_vol = light_rain_vol;
+    } else if (rain_type === "med") {
+      target_fade_in_vol = med_rain_vol;
+    } else if (rain_type === "heavy") {
+      target_fade_in_vol = heavy_rain_vol;
+    }
   }
   else if (key === "out")  {
-    if (rain_type == "light") start_fade_out_vol = light_rain_vol;
-    else if (rain_type == "med") start_fade_out_vol = med_rain_vol;
-    else if (rain_type == "heavy") start_fade_out_vol = heavy_rain_vol;
+    if (rain_type === "light") {
+      start_fade_out_vol = light_rain_vol;
+    } else if (rain_type === "med") {
+      start_fade_out_vol = med_rain_vol;
+    } else if (rain_type === "heavy") {
+      start_fade_out_vol = heavy_rain_vol;
+    }
   }
   else mx.message("Error: key unrecognized");
 }
 
 function set_rain_sound_vol(type, index, vol) {
-  if (type == "light") mx.set_sound_vol(light_rain_sounds[index], vol);
-  else if (type == "med") mx.set_sound_vol(med_rain_sounds[index], vol);
-  else if (type == "heavy") mx.set_sound_vol(heavy_rain_sounds[index], vol);
+  if (type === "light") {
+    mx.set_sound_vol(light_rain_sounds[index], vol);
+  } else if (type === "med") {
+    mx.set_sound_vol(med_rain_sounds[index], vol);
+  } else if (type === "heavy") {
+    mx.set_sound_vol(heavy_rain_sounds[index], vol);
+  } 
 }
 
 function stop_rain_sound(type, index) {
-  if (type == "light") mx.stop_sound(light_rain_sounds[index]);
-  else if (type == "med") mx.stop_sound(med_rain_sounds[index]);
-  else if (type == "heavy") mx.stop_sound(heavy_rain_sounds[index]);
+  if (type === "light") {
+    mx.stop_sound(light_rain_sounds[index]);
+  } else if (type === "med") {
+    mx.stop_sound(med_rain_sounds[index]);
+  } else if (type === "heavy") {
+    mx.stop_sound(heavy_rain_sounds[index]);
+  }
 }
 
 function move_rain_pos(type, index) {
-  if (type == "light") mx.set_sound_pos(light_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-  else if (type == "med") mx.set_sound_pos(med_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-  else if (type == "heavy") mx.set_sound_pos(heavy_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+  if (type === "light") {
+    mx.set_sound_pos(light_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+  } else if (type === "med") {
+    mx.set_sound_pos(med_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+  } else if (type === "heavy") {
+    mx.set_sound_pos(heavy_rain_sounds[index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
+  } 
 }
 
 function frame_handler(seconds) {
