@@ -234,11 +234,11 @@ function do_thunder_and_lightning() {
     }
   }
   else if (type_of_thunder_playing) {
-    if (type_of_thunder_playing == "heavy") {
+    if (type_of_thunder_playing === "heavy") {
       mx.set_sound_pos(heavy_thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-    } else if (type_of_thunder_playing == "med") {
+    } else if (type_of_thunder_playing === "med") {
       mx.set_sound_pos(thunder_sounds[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
-    } else if (type_of_thunder_playing == "distant") {
+    } else if (type_of_thunder_playing === "distant") {
       mx.set_sound_pos(distant_thunder[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
     }
   }  
