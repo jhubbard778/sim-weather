@@ -1,4 +1,3 @@
-
 const track_folder_name = "tracktitanwet";
 const terrain = {
     // terrain.png dimensions
@@ -136,7 +135,7 @@ var lightning_coords = {
 };
 var type_of_thunder_playing;
 var thunder_sound_index = 0;
-var time_for_another_lightning = 10;
+var delay_for_another_lightning = 10;
 // speed of sound in ft/s
 const speed_of_sound = 1117.2;
 const base_thunder_vol = 10;
@@ -145,15 +144,19 @@ const base_thunder_vol = 10;
 // We will allow lightning to happen outside the map at 3x scale
 const map_size_for_lightning = 3;
 
+var min_coords = 0;
+var max_coords;
 // Max and Min Coordinates of x and z where lightning can strike, algorithm keeps original center point constant.
-const min_coords = -(1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale)));
-const max_coords = (1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale))) + (terrain.size - 1);
+if (map_size_for_lightning > 1) {
+  min_coords = -(1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale)));
+  max_coords = (1/2 * (((terrain.size - 1) * terrain.scale) * map_size_for_lightning) - (1/2 * ((terrain.size - 1) * terrain.scale))) + (terrain.size - 1);
+} else {
+  max_coords = (((terrain.size - 1) * terrain.scale) * map_size_for_lightning);
+}
 
 /* get the max coordinate of lightning outside map, multiple by sqrt(2) for longest distance from (0,0) to (max,max) (because the map is square and can be divided 
   into two 45-45-90 triangles) and divide for speed of sound for the max time it would take thunder to reach the player that's inside of the map boundaries */
 const max_time_of_thunder_pending = (max_coords * Math.sqrt(2)) / speed_of_sound;
-
-mx.message("max time thunder can pend: " + (max_time_of_thunder_pending.toFixed(3)).toString());
 
 function do_thunder_and_lightning() {
   current_weather_type = get_weather_type();
@@ -167,29 +170,39 @@ function do_thunder_and_lightning() {
   }
 
   var seconds = mx.seconds;
-
+  var rand;
   // get time of a lightning strike
-  if (!got_time_lighning && seconds >= time_for_another_lightning) {
-    time_lighning_strike = randomNumFromInterval(0, 60) + seconds;
+  if (!got_time_lighning && seconds >= delay_for_another_lightning) {
+    var intervals = get_min_max_lightning_strikes();
+    if (!intervals) return;
+    rand = mulberry32SeedFromInterval(seconds * 1234, intervals[0], intervals[1]);
+    time_lighning_strike = rand() + seconds;
+    mx.message("time of lightning strike: " + time_lighning_strike.toString());
     got_time_lighning = true;
   }
 
   // get coords of lighning strike
   if (got_time_lighning && seconds >= time_lighning_strike) {
 
-    lightning_coords.x = randomIntFromInterval(min_coords, max_coords);
-    lightning_coords.z = randomIntFromInterval(min_coords, max_coords);
+    rand = mulberry32SeedFromInterval(time_lighning_strike * 100, min_coords, max_coords);
+    lightning_coords.x = rand();
+
+    rand = mulberry32SeedFromInterval(time_lighning_strike * 10000, min_coords, max_coords);
+    lightning_coords.z = rand();
 
     // get elevation of terrain at lightning strike coords x and z, and the height of the strike will be between the elevation and double the height of the elevation
     var height = mx.get_elevation(lightning_coords.x, lightning_coords.z);
-    lightning_coords.y = randomIntFromInterval(height, height * 2);
+
+    // Seed the random number with the coordinates of the x and z, range it between the height and double the height
+    rand = mulberry32SeedFromInterval(lightning_coords.x + lightning_coords.z, height, height * 2);
+    lightning_coords.y = rand();
 
     // TODO: Lightning Animations
     mx.message("Lightning Strike!");
     mx.message("Lightning Strike Coords: X - " + (lightning_coords.x).toString() + " Y - " + (lightning_coords.y).toString() + " Z - " + (lightning_coords.z).toString());
 
     // wait at least delay seconds for another lightning strike
-    time_for_another_lightning = time_lighning_strike + max_time_of_thunder_pending;
+    delay_for_another_lightning = time_lighning_strike + max_time_of_thunder_pending;
     thunder_pending = true;
     got_time_lighning = false;
   }
@@ -244,8 +257,27 @@ function do_thunder_and_lightning() {
   }  
 }
 
+function get_min_max_lightning_strikes() {
+  var min, max;
+  if (current_weather_type.includes("light-thunder")) {
+    min = 10;
+    max = 60;
+  } else if (current_weather_type.includes("med-thunder")) {
+    min = 5;
+    max = 30;
+  } else if (current_weather_type.includes("heavy-thunder")) {
+    min = 0;
+    max = 15;
+  } else {
+    mx.message("Weather type unrecognized!");
+    return undefined;
+  }
+  return [min, max];
+}
+
 function play_thunder_sound(arr, vol) {
-  thunder_sound_index = randomIntFromInterval(0, arr.length - 1);
+  var rand = mulberry32SeedFromInterval(mx.seconds * 12345, 0, arr.length - 1);
+  thunder_sound_index = Math.floor(rand());
   mx.set_sound_pos(arr[thunder_sound_index], cam_pos_arr[0], cam_pos_arr[1], cam_pos_arr[2]);
   mx.set_sound_vol(arr[thunder_sound_index], vol);
   mx.start_sound(arr[thunder_sound_index]);
@@ -259,69 +291,59 @@ var time_weather_started = 0;
 var initialized_weather_for_session = false;
 const min_weather_types = 10;
 var dupe_iterations = 0;
-var is_server_session = false;
 /* Weather should be the same for every client, but different for each session, so we will use the players slot numbers from the running order,
     which changes at the beginning of each session, but is a constant for all players as the basis for creating what weather types to choose */
 function get_weather_type() {
   if (!initialized_weather_for_session) {
     var r = g_running_order;
-    is_server_session = determine_if_server();
-    if (r.length <= 1 || !is_server_session) {
-      for (var i = 0; i < min_weather_types; i++)
-        weather_indices_for_session[i] = randomIntFromInterval(0, weather_types_arr.length - 1);
+
+    for (var i = 0; i < r.length; i++) {
+      var rand = mulberry32SeedFromInterval((mx.get_rider_number(r[i].slot) * 321) / r.length, 0, weather_types_arr.length - 1);
+      weather_indices_for_session[i] = Math.floor(rand());
     }
-    else {
-      for (var i = 0; i < r.length; i++) {
-        weather_indices_for_session[i] = (r[i].slot % weather_types_arr.length);
-      }
 
-      // if we have less than the number of minimum weather types scheduled
-      if (weather_indices_for_session.length < min_weather_types) {
-        // increase the size of the weather for sessions so it has at least min weather types
-        const times_to_dupe_array = Math.ceil(min_weather_types / weather_indices_for_session.length);
-        // hold our original array's length
-        const original_arr_length = weather_indices_for_session.length;
+    // if we have less than the number of minimum weather types scheduled
+    if (weather_indices_for_session.length < min_weather_types) {
 
-        var j = 0;
-        for (var i = (original_arr_length - 1); i < (original_arr_length * times_to_dupe_array); i++) {
-          // if we have one rider pick a random number, otherwise try to get a 'random' number that all clients will share
-          weather_indices_for_session[i] = ((r[j].slot + (dupe_iterations + 1)) % weather_types_arr.length);
-          // if we reached the end of the running order reset j and increment the number of times we've duped the array
-          j++;
-          if (j == original_arr_length) {
-            dupe_iterations++;
-            j = 0;
-          }
+      // increase the size of the weather for sessions so it has at least min weather types
+      const times_to_dupe_array = Math.ceil(min_weather_types / weather_indices_for_session.length);
+      // hold our original array's length
+      const original_arr_length = weather_indices_for_session.length;
+
+      var j = 0;
+      for (var i = (original_arr_length - 1); i < (original_arr_length * times_to_dupe_array); i++) {
+        // if we have one rider pick a random number, otherwise try to get a 'random' number that all clients will share
+        var rand = mulberry32SeedFromInterval((mx.get_rider_number(r[j].slot) * 1234) * (dupe_iterations + 1) / r.length, 0, weather_types_arr.length - 1);
+        weather_indices_for_session[i] = Math.floor(rand());
+        // if we reached the end of the running order reset j and increment the number of times we've duped the array
+        j++;
+        if (j == original_arr_length) {
+          dupe_iterations++;
+          j = 0;
         }
       }
     }
     initialized_weather_for_session = true;
   }
+
   if (mx.seconds >= duration_of_weather_type + time_weather_started) {
     weather_type_index++;
     // set the time that the new weather started
     time_weather_started = mx.seconds;
     // if we reach the end of the weather array, reset the index to the beginning
-    if (weather_type_index == weather_indices_for_session.length - 1) weather_type_index = 0;
-    // if we have one rider pick a random time between 1-6 mins, otherwise get a 'random' number that all clients will share
-    if (g_running_order.length == 1 || !is_server_session) duration_of_weather_type = randomIntFromInterval(60, 360);
-    else {
-      var num;
-      // if first's timing gate is greater than zero make the number the running order position, otherwise make it first's slot
-      if (mx.get_running_order_position(0) > 0) {
-        num = mx.get_running_order_position(0);
-      } else {
-        num = mx.get_running_order_slot(0);
-      }
-      duration_of_weather_type = ((num % normal_lap_length) + 4) * (2 * normal_lap_length / 3);
-    }
+    if (weather_type_index == weather_indices_for_session.length) weather_type_index = 0;
+
+    // Pick a weather duration seeded by the time
+    var rand = mulberry32SeedFromInterval(mx.seconds * 12345, 60, 360);
+    duration_of_weather_type = rand();
+
     mx.message("weather type changed to: " + weather_types_arr[weather_indices_for_session[weather_type_index]]);
     mx.message("duration of new weather: " + duration_of_weather_type.toString() + "s");
   }
   return weather_types_arr[weather_indices_for_session[weather_type_index]];
 }
 
-var current_rain_sound = 0;
+var current_rain_sound_index = 0;
 var is_raining = false;
 var rain_type;
 
@@ -368,11 +390,11 @@ function do_rain() {
 
     // previous rain type and sound index
     prev_rain_type = rain_type;
-    prev_rain_index = current_rain_sound;
+    prev_rain_index = current_rain_sound_index;
 
     // Reinitialize rain type and index
     rain_type = undefined;
-    current_rain_sound = undefined;
+    current_rain_sound_index = undefined;
 
     // set the fade out rain time and the current volume we're starting at fading to zero
     fade_out_rain_type = prev_rain_type;
@@ -390,11 +412,20 @@ function do_rain() {
   else if (!is_raining && !current_weather_type.includes("no-rain") && !current_weather_type.includes("clear")) {
     // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
     if (current_weather_type.includes("light-rain")) {
-      start_rain(light_rain_sounds, "light");
+      if (!rain_type) {
+        rain_type = "light";
+      }
+      start_rain(light_rain_sounds);
     } else if (current_weather_type.includes("med-rain")) {
-      start_rain(med_rain_sounds, "med");
+      if (!rain_type) {
+        rain_type = "med";
+      }
+      start_rain(med_rain_sounds);
     } else if (current_weather_type.includes("heavy-rain")) {
-      start_rain(heavy_rain_sounds, "heavy");
+      if (!rain_type) {
+        rain_type = "heavy";
+      }
+      start_rain(heavy_rain_sounds);
     } else {
       mx.message("Error: Weather type Unrecognized");
       is_raining = true;
@@ -427,7 +458,7 @@ function do_rain() {
     }
 
     // if it's raining we update the current rain sound position
-    move_rain_pos(rain_type, current_rain_sound);
+    move_rain_pos(rain_type, current_rain_sound_index);
   }
 
   if (fade_happening) {
@@ -437,14 +468,14 @@ function do_rain() {
     if (!fade_in_done) {
       // Calculate the current volume and set it
       current_fade_in_vol = (fade_in_vol_per_sec * t);
-      set_rain_sound_vol(rain_type, current_rain_sound, current_fade_in_vol);
+      set_rain_sound_vol(rain_type, current_rain_sound_index, current_fade_in_vol);
 
       // TODO: Fade in rain animation
 
       // If our current volume is greater than or equal to the target volume
       if (current_fade_in_vol >= target_fade_in_vol) {
         // set the sound to the target volume just in case for demos
-        set_rain_sound_vol(rain_type, current_rain_sound, target_fade_in_vol);
+        set_rain_sound_vol(rain_type, current_rain_sound_index, target_fade_in_vol);
 
         // We're done with these variables, leave them undefined
         fade_in_sound_arr = undefined;
@@ -499,7 +530,7 @@ function change_rain_type(new_rain_type) {
 
   // set the previous rain type, and the previous rain sound index
   prev_rain_type = rain_type;
-  prev_rain_index = current_rain_sound;
+  prev_rain_index = current_rain_sound_index;
 
   // fade in rain type is the new rain type, fade out is previous rain type
   fade_in_rain_type = new_rain_type;
@@ -510,11 +541,11 @@ function change_rain_type(new_rain_type) {
   
   // start a new rain sound for preparation of fading in
   if (rain_type === "light") {
-    start_rain(light_rain_sounds, "light");
+    start_rain(light_rain_sounds);
   } else if (rain_type === "med") {
-    start_rain(med_rain_sounds, "med");
+    start_rain(med_rain_sounds);
   } else if (rain_type === "heavy") {
-    start_rain(heavy_rain_sounds, "heavy");
+    start_rain(heavy_rain_sounds);
   }
 
   // get the fade in volume
@@ -533,13 +564,13 @@ function change_rain_type(new_rain_type) {
   fade_out_done = false;
 }
 
-function start_rain(sound_arr, type) {
-  current_rain_sound = randomIntFromInterval(0, sound_arr.length - 1);
-  rain_type = type;
+function start_rain(sound_arr) {
+  var rand = mulberry32SeedFromInterval(mx.seconds * 100, 0, sound_arr.length - 1);
+  current_rain_sound_index = Math.floor(rand());
 
   // initialize sound volume to zero and start it for the fade
-  mx.set_sound_vol(sound_arr[current_rain_sound], 0);
-  mx.start_sound(sound_arr[current_rain_sound]);
+  mx.set_sound_vol(sound_arr[current_rain_sound_index], 0);
+  mx.start_sound(sound_arr[current_rain_sound_index]);
 }
 
 function get_fade_volumes(key) {
@@ -596,9 +627,25 @@ function move_rain_pos(type, index) {
 
 function frame_handler(seconds) {
   g_running_order = mx.get_running_order();
-  updateCamPosition();
-  do_thunder_and_lightning();
-  do_rain();
+  try {
+    updateCamPosition();
+  }
+  catch (e) {
+    mx.message("cam pos error: " + e.toString());
+  }
+  try {
+    do_thunder_and_lightning();
+  }
+  catch (e) {
+    mx.message("lightning error: " + e.toString());
+  }
+  try {
+    do_rain();
+  }
+  catch (e) {
+    mx.message("rain error: " + e.toString());
+  }
+  
   frame_handler_prev(seconds);
 }
 
@@ -607,3 +654,12 @@ mx.frame_handler = frame_handler;
 
 function randomIntFromInterval(min, max) {return Math.floor(Math.random() * (max - min) + min);}
 function randomNumFromInterval(min,max) {return Math.random() * (max - min) + min;}
+function mulberry32SeedFromInterval(a, min, max) {
+  return function() {
+    var t = a += 0x6D2B79F5;
+    t = Math.imul(t ^ t >>> 15, t | 1);
+    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
+    var num = ((t ^ t >>> 14) >>> 0) / 4294967296;
+    return (num * (max - min)) + min;
+  }
+}
