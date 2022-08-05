@@ -468,6 +468,8 @@ function doRain() {
     fadeHappening = true;
     fadeOutDone = false;
     
+    hideRainBillboards();
+
     isRaining = false;
   }
   // If the current weather is rain and it is not raining
@@ -521,7 +523,7 @@ function doRain() {
 
     // if it's raining we update the current rain sound position
     moveRainPosition(rainType, currentRainSoundIndex);
-    
+    moveRainBillboards();
   }
 
   if (fadeHappening) {
@@ -686,6 +688,76 @@ function moveRainPosition(type, index) {
   } else if (type === "heavy") {
     mx.set_sound_pos(heavyRainSounds[index], pos[0], pos[1], pos[2]);
   } 
+}
+
+const gridsize = 45; // How many feet between grid points
+const gridcount = 9; // How many grid points along each edge
+const gridarea = gridcount * gridcount;
+var rain = [];
+for (var i = 0; i < gridarea; i++) {rain.push({x: undefined, z: undefined, alpha: undefined});}
+
+const rainTexture = "@" + trackFolderName + "/billboard/rain/rain/rain.seq";
+const rainBillboardStartIndex = mx.find_billboard(rainTexture, 0);
+var isEnoughBillboards = false;
+if (rainBillboardStartIndex > -1) {
+  var lastIndexFound = rainBillboardStartIndex;
+  var numRainBillboards = 1;
+  isEnoughBillboards = true;
+  for (var i = rainBillboardStartIndex + 1; lastIndexFound == i - 1; i++) {
+    lastIndexFound = mx.find_billboard(rainTexture, i);
+    if (lastIndexFound == -1) break;
+    numRainBillboards++;
+  }
+
+  if (numRainBillboards < gridarea) {
+    mx.message("Error...not enough rain sequence billboards in a row in billboards file | Missing Billboards: " + (gridarea - numRainBillboards).toString());
+    isEnoughBillboards = false;
+  }
+
+  if (numRainBillboards > gridarea) {
+    mx.message("Warning...too many rain billboards | Excess billboards: " + (numRainBillboards - gridarea).toString());
+  }
+} 
+
+hideRainBillboards();
+
+function moveRainBillboards() {
+  if (!isEnoughBillboards) return;
+  for (var z = 0; z < gridcount; z++) {
+  	for (var x = 0; x < gridcount; x++) {
+      var camx = pos[0], camz = pos[2];
+  		var billboard_x = Math.floor((camx / gridsize) - (gridcount / 2.0) + 0.5 + x) * gridsize;
+  		var billboard_z = Math.floor((camz / gridsize) - (gridcount / 2.0) + 0.5 + z) * gridsize;
+
+      var index = x + z * gridcount;
+
+      // probably a good idea to fade out to hide popping
+  		var dx = rain[index].x - camx;
+  		var dz = rain[index].z - camz;
+  		var alpha = 1 - (Math.sqrt(dx * dx + dz * dz) / (gridsize * gridcount / 2));
+      if (alpha > 1) alpha = 1;
+      if (alpha < 0) alpha = 0;
+
+      // Change the alpha of the rain billboards if we have a new alpha level
+      if (rain[index].alpha != alpha) {
+        rain[index].alpha = alpha;
+        mx.color_billboard(rainBillboardStartIndex + index, 1, 1, 1, rain[index].alpha);
+      }
+      
+      // If we need to move the grid point
+      if (rain[index].x != billboard_x || rain[index].z != billboard_z) {
+        rain[index].x = billboard_x;
+        rain[index].z = billboard_z;
+        mx.move_billboard(rainBillboardStartIndex + index, rain[index].x, 0, rain[index].z);
+      }
+  	}
+  }
+}
+
+function hideRainBillboards() {
+  for (var i = rainBillboardStartIndex; i < rainBillboardStartIndex + gridarea; i++) {
+    mx.color_billboard(i, 1, 1, 1, 0);
+  }
 }
 
 function frameHandler(seconds) {
