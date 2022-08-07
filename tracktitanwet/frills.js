@@ -124,9 +124,26 @@ function addSound(arr, directory) {
   }
 }
 
-const lightRainVolume = 1;
-const mediumRainVolume = 2;
-const heavyRainVolume = 4;
+// Objects to hold properties about each rain billboard
+const lightRain = {
+  vol: 1,
+  texture: "@" + trackFolderName + "/billboard/rain/light-rain/lightrain.seq",
+  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  billboardArr: []
+};
+const mediumRain = {
+  vol: 2,
+  texture: "@" + trackFolderName + "/billboard/rain/rain/rain.seq",
+  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  billboardArr: []
+};
+const heavyRain = {
+  vol: 4,
+  texture: "@" + trackFolderName + "/billboard/rain/heavy-rain/heavyrain.seq",
+  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  billboardArr: []
+};
+
 // set the loops up, the variables above will be used for fade-in-out volumes
 function setRainLoops() {
   for (var i = 0; i < lightRainSounds.length; i++) mx.set_sound_loop(lightRainSounds[i], 1);
@@ -307,7 +324,6 @@ var weatherDurations = [];
 var timesWeatherStarted = [];
 var iterationThroughWeatherIndices = 1;
 var timeWeatherStarted = 0;
-var weatherTimeLeft = 0;
 var initializedWeatherForSession = false;
 const minWeatherTypes = 10;
 /* Weather should be the same for every client, but different for each session, so we will use the players slot numbers from the running order,
@@ -348,6 +364,42 @@ function getWeatherType() {
 
   var seconds = mx.seconds;
 
+  var weatherTimeLeft = durationOfWeatherType - (seconds - timeWeatherStarted);
+  /*if (mx.seconds - lastDisplay > 64 / 128 || mx.seconds < lastDisplay) {
+    mx.message("Time Left: " + timeToString(weatherTimeLeft));
+    lastDisplay = seconds;
+  }*/
+  if (weatherTimeLeft <= 0) {
+    weatherTypeIndex++;
+    // if we reach the end of the weather array, reset the index to the beginning
+    if (weatherTypeIndex == weatherIndicesForSession.length) {
+      weatherTypeIndex = 0;
+      iterationThroughWeatherIndices++;
+    }
+    
+    // Convert the weather type index to terms of lengths for the duration and times arrays
+    var index = weatherTypeIndex + ((iterationThroughWeatherIndices - 1) * weatherIndicesForSession.length);
+    if (index == weatherDurations.length) {
+      // Pick a weather duration seeded by the time if we don't have one already gotten
+      var rand = mulberry32SeedFromInterval(seconds * 12345, 60, 360);
+      weatherDurations.push(rand());
+      // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
+      timesWeatherStarted.push(seconds);
+      mx.message("Weather Durations: " + weatherDurations.toString());
+      mx.message("Times Started: " + timesWeatherStarted.toString());
+    }
+    // Get the index of our durations and times started and store the current duration and time started
+    durationOfWeatherType = weatherDurations[index];
+    timeWeatherStarted = timesWeatherStarted[index];
+    // If someone's tabbed out for more then a frame, add to the duration of the previous weather type
+    var difference = timesWeatherStarted[index] - (weatherDurations[index - 1] + timesWeatherStarted[index - 1]);
+    if (difference > (1/128)) {
+      weatherDurations[index - 1] += difference;
+    }
+    mx.message("weather type changed to: " + weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]]);
+    mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
+  }
+
   // if we're in a demo and we went behind the time that the weather started we need to go back to the previous weather type and duration
   if (seconds < timeWeatherStarted) {
     // If we're at the beginning set it to the top of the weather indices and go back in an iteration
@@ -360,39 +412,7 @@ function getWeatherType() {
 
     // Convert the weather type index to terms of lengths for the duration and times arrays
     var index = weatherTypeIndex + ((iterationThroughWeatherIndices - 1) * weatherIndicesForSession.length);
-    durationOfWeatherType = weatherDurations[index];
-    timeWeatherStarted = timesWeatherStarted[index];
-    mx.message("weather type changed to: " + weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]]);
-    mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
-  }
 
-  weatherTimeLeft = durationOfWeatherType - (mx.seconds - timeWeatherStarted);
-  if (mx.seconds - lastDisplay > 64 / 128 || mx.seconds < lastDisplay) {
-    //mx.message("Time Left: " + timeToString(weatherTimeLeft));
-    lastDisplay = seconds;
-  }
-
-  if (weatherTimeLeft <= 0) {
-    weatherTypeIndex++;
-    // if we reach the end of the weather array, reset the index to the beginning
-    if (weatherTypeIndex == weatherIndicesForSession.length) {
-      weatherTypeIndex = 0;
-      iterationThroughWeatherIndices++;
-    }
-    
-    // Convert the weather type index to terms of lengths for the duration and times arrays
-    var index = weatherTypeIndex + ((iterationThroughWeatherIndices - 1) * weatherIndicesForSession.length);
-    if (index >= weatherDurations.length) {
-      if (index > weatherDurations.length) mx.message("You fucking suck figure it out");
-      // Pick a weather duration seeded by the time if we don't have one already gotten
-      var rand = mulberry32SeedFromInterval(seconds * 12345, 60, 360);
-      weatherDurations.push(rand());
-      // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
-      timesWeatherStarted.push(seconds);
-      mx.message("Weather Durations: " + weatherDurations.toString());
-      mx.message("Times Started: " + timesWeatherStarted.toString());
-    }
-    // Get the index of our durations and times started and store the current duration and time started
     durationOfWeatherType = weatherDurations[index];
     timeWeatherStarted = timesWeatherStarted[index];
 
@@ -400,8 +420,7 @@ function getWeatherType() {
     mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
   }
 
-
-
+  
   return weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]];
 }
 
@@ -417,7 +436,7 @@ var currentFadeInVolume = 0;
 var targetFadeInVolume;
 // fade in time in seconds
 const FADE_IN_TIME = 8;
-var fadeInVolumePerSec;
+var fadeInVolPerSec;
 
 // FADE OUT VARIABLES
 var fadeOutRainType;
@@ -428,7 +447,7 @@ var startFadeOutVolume;
 // ## Target Fade Out is Constant 0 ##
 // fade out time in seconds
 const FADE_OUT_TIME = 8;
-var fadeOutVolumePerSec;
+var fadeOutVolPerSec;
 
 // Hold the time at which we start a fade
 var timeFadeStarted;
@@ -448,7 +467,7 @@ function doRain() {
 
     // set the fade out start volume
     getFadeVolumes("out");
-    fadeOutVolumePerSec = (0 - startFadeOutVolume) / FADE_OUT_TIME;
+    fadeOutVolPerSec = (0 - startFadeOutVolume) / FADE_OUT_TIME;
 
     // previous rain type and sound index
     prevRainType = rainType;
@@ -461,54 +480,61 @@ function doRain() {
     // set the fade out rain time and the current volume we're starting at fading to zero
     fadeOutRainType = prevRainType;
 
+    isRaining = false;
+
+    // If we are currently already in a fade cancel it and return
+    if (fadeHappening) {
+      cancelFade();
+      return;
+    }
+
     // set the time we're starting the fade in
     timeFadeStarted = mx.seconds;
 
     // say that we're fading, and that the fade out is not done
     fadeHappening = true;
     fadeOutDone = false;
-    
-    hideRainBillboards();
-
-    isRaining = false;
   }
   // If the current weather is rain and it is not raining
   else if (!isRaining && !currentWeatherType.includes("no-rain") && !currentWeatherType.includes("clear")) {
     // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
     if (currentWeatherType.includes("light-rain")) {
-      if (!rainType) {
-        rainType = "light";
-      }
+      rainType = "light";
       startRain(lightRainSounds);
     } else if (currentWeatherType.includes("med-rain")) {
-      if (!rainType) {
-        rainType = "med";
-      }
+      rainType = "med";
       startRain(medRainSounds);
     } else if (currentWeatherType.includes("heavy-rain")) {
-      if (!rainType) {
-        rainType = "heavy";
-      }
+      rainType = "heavy";
       startRain(heavyRainSounds);
     } else {
       mx.message("Error: Weather type Unrecognized");
       isRaining = true;
       return;
     }
+
+    prevRainType = undefined;
+    prevRainIndex = undefined;
   
     // set the rain fade in type, get the volume we're fading into
     fadeInRainType = rainType;
     currentFadeInVolume = 0;
     getFadeVolumes("in");
-    fadeInVolumePerSec = (targetFadeInVolume - currentFadeInVolume) / FADE_IN_TIME;
+    fadeInVolPerSec = (targetFadeInVolume - currentFadeInVolume) / FADE_IN_TIME;
 
+    isRaining = true;
+
+    // If we are currently already in a fade cancel it and return
+    if (fadeHappening) {
+      cancelFade();
+      return;
+    }
+    
     // get time we're starting the fade
     timeFadeStarted = mx.seconds;
-
     // say that we're fading, and that the fade in is not done
     fadeHappening = true;
     fadeInDone = false;
-    isRaining = true;
   }
 
   if (isRaining) {
@@ -523,22 +549,35 @@ function doRain() {
 
     // if it's raining we update the current rain sound position
     moveRainPosition(rainType, currentRainSoundIndex);
-    moveRainBillboards();
+    // If there's not a fade happening we will need to move the rain billboards, if there is
+    // we handle the moving in the fading section
+    if (!fadeHappening) {
+      rainType == "light" ? moveRainBillboards(lightRain, 1) : rainType == "med" ? moveRainBillboards(mediumRain, 1) : moveRainBillboards(heavyRain, 1);
+    }
   }
 
   if (fadeHappening) {
     // store time since fade started
     var t = mx.seconds - timeFadeStarted;
-
+    // If we go back in a demo between a fade we must reset
+    if (t < 0) {
+      cancelFade();
+      return;
+    }
     if (!fadeInDone) {
       // Calculate the current volume and set it
-      currentFadeInVolume = (fadeInVolumePerSec * t);
+      currentFadeInVolume = (fadeInVolPerSec * t);
       setRainSoundVolume(rainType, currentRainSoundIndex, currentFadeInVolume);
 
       // TODO: Fade in rain animation
+      var currentOpacity = (1 / FADE_IN_TIME * t);
+      if (currentOpacity >= 0 && currentOpacity <= 1) {
+        rainType == "light" ? moveRainBillboards(lightRain, currentOpacity) : rainType == "med" ? moveRainBillboards(mediumRain, currentOpacity) : moveRainBillboards(heavyRain, currentOpacity);
+      }
+      
 
-      // If our current volume is greater than or equal to the target volume
-      if (currentFadeInVolume >= targetFadeInVolume) {
+      // If our current volume is greater than or equal to the target volume and we've reached opacity
+      if (currentFadeInVolume >= targetFadeInVolume && currentOpacity >= 1) {
         // set the sound to the target volume just in case for demos
         setRainSoundVolume(rainType, currentRainSoundIndex, targetFadeInVolume);
 
@@ -547,7 +586,7 @@ function doRain() {
         currentFadeInVolume = undefined;
         targetFadeInVolume = undefined;
         fadeInRainType = undefined;
-        fadeInVolumePerSec = undefined;
+        fadeInVolPerSec = undefined;
 
         // We're done fading in
         fadeInDone = true;
@@ -558,13 +597,17 @@ function doRain() {
       moveRainPosition(prevRainType, prevRainIndex);
 
       // Calculate the current volume and set it
-      currentFadeOutVolume = startFadeOutVolume + (fadeOutVolumePerSec * t);
+      currentFadeOutVolume = startFadeOutVolume + (fadeOutVolPerSec * t);
       setRainSoundVolume(prevRainType, prevRainIndex, currentFadeOutVolume);
 
       // TODO: Fade out rain animation
-
+      var currentOpacity = 1 - (1 / FADE_IN_TIME * t);
+      if (currentOpacity >= 0 && currentOpacity <= 1) {
+        prevRainType == "light" ? moveRainBillboards(lightRain, currentOpacity) : prevRainType == "med" ? moveRainBillboards(mediumRain, currentOpacity) : moveRainBillboards(heavyRain, currentOpacity);
+      }
+      
       // If we've reached less than or equal to zero
-      if (currentFadeOutVolume <= 0) {
+      if (currentFadeOutVolume <= 0 && currentOpacity <= 0) {
         // set the sound to the target volume just in case for demos
         setRainSoundVolume(prevRainType, prevRainIndex, 0);
 
@@ -572,19 +615,33 @@ function doRain() {
         stopRainSound(prevRainType, prevRainIndex);
 
         // We're done with these variables for now, leave them undefined
-        prevRainType = undefined;
-        prevRainIndex = undefined;
         fadeInSoundArr = undefined;
         fadeOutRainType = undefined;
         currentFadeOutVolume = undefined;
         startFadeOutVolume = undefined;
-        fadeOutVolumePerSec = undefined;
+        fadeOutVolPerSec = undefined;
 
         // We're done fading out
         fadeOutDone = true;
       }
     }
     if (fadeInDone && fadeOutDone) fadeHappening = false;
+  }
+}
+
+function cancelFade() {
+  fadeHappening = false;
+  fadeInDone = true;
+  fadeOutDone = true;
+  if (rainType != undefined) {
+    var vol = rainType == "light" ? lightRain.vol : rainType == "med" ? mediumRain.vol : heavyRain.vol;
+    setRainSoundVolume(rainType, currentRainSoundIndex, vol);
+    rainType == "light" ? moveRainBillboards(lightRain, 1) : rainType == "med" ? moveRainBillboards(mediumRain, 1) : moveRainBillboards(heavyRain, 1);
+  }
+  if (prevRainType != undefined) {
+    mx.message("fade happening prev rain type: " + prevRainType.toString());
+    setRainSoundVolume(prevRainType, prevRainIndex, 0);
+    prevRainType == "light" ? hideRainBillboards(lightRain) : prevRainType == "med" ? hideRainBillboards(mediumRain) : hideRainBillboards(heavyRain);
   }
 }
 
@@ -603,6 +660,11 @@ function changeRainType(newRainType) {
 
   // reset rain type
   rainType = newRainType;
+
+  // If we are currently already in a fade cancel it
+  if (fadeHappening) {
+    cancelFade();
+  }
   
   // start a new rain sound for preparation of fading in
   if (rainType === "light") {
@@ -618,8 +680,8 @@ function changeRainType(newRainType) {
 
   // initialize current fade volume and vol/sec variables
   currentFadeInVolume = 0;
-  fadeInVolumePerSec = targetFadeInVolume / FADE_IN_TIME;
-  fadeOutVolumePerSec = (0 - startFadeOutVolume) / FADE_OUT_TIME;
+  fadeInVolPerSec = targetFadeInVolume / FADE_IN_TIME;
+  fadeOutVolPerSec = (0 - startFadeOutVolume) / FADE_OUT_TIME;
 
   // get time fade starting
   timeFadeStarted = mx.seconds;
@@ -641,20 +703,20 @@ function startRain(sound_arr) {
 function getFadeVolumes(key) {
   if (key === "in") {
     if (rainType === "light") {
-      targetFadeInVolume = lightRainVolume;
+      targetFadeInVolume = lightRain.vol;
     } else if (rainType === "med") {
-      targetFadeInVolume = mediumRainVolume;
+      targetFadeInVolume = mediumRain.vol;
     } else if (rainType === "heavy") {
-      targetFadeInVolume = heavyRainVolume;
+      targetFadeInVolume = heavyRain.vol;
     }
   }
   else if (key === "out")  {
     if (rainType === "light") {
-      startFadeOutVolume = lightRainVolume;
+      startFadeOutVolume = lightRain.vol;
     } else if (rainType === "med") {
-      startFadeOutVolume = mediumRainVolume;
+      startFadeOutVolume = mediumRain.vol;
     } else if (rainType === "heavy") {
-      startFadeOutVolume = heavyRainVolume;
+      startFadeOutVolume = heavyRain.vol;
     }
   }
   else mx.message("Error: key unrecognized");
@@ -690,72 +752,84 @@ function moveRainPosition(type, index) {
   } 
 }
 
-const gridsize = 45; // How many feet between grid points
-const gridcount = 9; // How many grid points along each edge
-const gridarea = gridcount * gridcount;
-var rain = [];
-for (var i = 0; i < gridarea; i++) {rain.push({x: undefined, z: undefined, alpha: undefined});}
+const grid = {
+  size: 45, // How many feet between grid points
+  count: 9, // How many grid points along each edge
+  get area() {return this.count * this.count;}
+};
 
-const rainTexture = "@" + trackFolderName + "/billboard/rain/rain/rain.seq";
-const rainBillboardStartIndex = mx.find_billboard(rainTexture, 0);
-var isEnoughBillboards = false;
-if (rainBillboardStartIndex > -1) {
-  var lastIndexFound = rainBillboardStartIndex;
-  var numRainBillboards = 1;
-  isEnoughBillboards = true;
-  for (var i = rainBillboardStartIndex + 1; lastIndexFound == i - 1; i++) {
-    lastIndexFound = mx.find_billboard(rainTexture, i);
-    if (lastIndexFound == -1) break;
-    numRainBillboards++;
+var isEnoughBillboards;
+isEnoughBillboards = checkEnoughBillboards(lightRain);
+isEnoughBillboards = checkEnoughBillboards(mediumRain);
+isEnoughBillboards = checkEnoughBillboards(heavyRain);
+
+if (isEnoughBillboards) {
+  hideRainBillboards(lightRain);
+  hideRainBillboards(mediumRain);
+  hideRainBillboards(heavyRain);
+  for (var i = 0; i < grid.area; i++) {lightRain.billboardArr.push({x: -1, z: -1, alpha: -1});}
+  for (var i = 0; i < grid.area; i++) {mediumRain.billboardArr.push({x: -1, z: -1, alpha: -1});}
+  for (var i = 0; i < grid.area; i++) {heavyRain.billboardArr.push({x: -1, z: -1, alpha: -1});}
+}
+function checkEnoughBillboards(type) {
+  if (type.indexStart > -1) {
+    var lastIndexFound = type.indexStart;
+    var numRainBillboards = 1;
+    isEnoughBillboards = true;
+    for (var i = type.indexStart + 1; lastIndexFound == i - 1; i++) {
+      lastIndexFound = mx.find_billboard(type.texture, i);
+      if (lastIndexFound == -1) break;
+      numRainBillboards++;
+    }
+  
+    if (numRainBillboards < grid.area) {
+      mx.message("Error...not enough rain sequence billboards in a row in billboards file | Missing Billboards: " + (grid.area - numRainBillboards).toString());
+      return false;
+    }
+  
+    if (numRainBillboards > grid.area) {
+      mx.message("Warning...too many rain billboards | Excess billboards: " + (numRainBillboards - grid.area).toString());
+    }
+    return true;
   }
+}
 
-  if (numRainBillboards < gridarea) {
-    mx.message("Error...not enough rain sequence billboards in a row in billboards file | Missing Billboards: " + (gridarea - numRainBillboards).toString());
-    isEnoughBillboards = false;
-  }
-
-  if (numRainBillboards > gridarea) {
-    mx.message("Warning...too many rain billboards | Excess billboards: " + (numRainBillboards - gridarea).toString());
-  }
-} 
-
-hideRainBillboards();
-
-function moveRainBillboards() {
+function moveRainBillboards(type, alphaStart) {
   if (!isEnoughBillboards) return;
-  for (var z = 0; z < gridcount; z++) {
-  	for (var x = 0; x < gridcount; x++) {
+  for (var z = 0; z < grid.count; z++) {
+  	for (var x = 0; x < grid.count; x++) {
       var camx = pos[0], camz = pos[2];
-  		var billboard_x = Math.floor((camx / gridsize) - (gridcount / 2.0) + 0.5 + x) * gridsize;
-  		var billboard_z = Math.floor((camz / gridsize) - (gridcount / 2.0) + 0.5 + z) * gridsize;
+  		var billboard_x = Math.floor((camx / grid.size) - (grid.count / 2.0) + 0.5 + x) * grid.size;
+  		var billboard_z = Math.floor((camz / grid.size) - (grid.count / 2.0) + 0.5 + z) * grid.size;
 
-      var index = x + z * gridcount;
+      var index = x + z * grid.count;
 
       // probably a good idea to fade out to hide popping
-  		var dx = rain[index].x - camx;
-  		var dz = rain[index].z - camz;
-  		var alpha = 1 - (Math.sqrt(dx * dx + dz * dz) / (gridsize * gridcount / 2));
+  		var dx = type.billboardArr[index].x - camx;
+  		var dz = type.billboardArr[index].z - camz;
+  		var alpha = alphaStart - (Math.sqrt(dx * dx + dz * dz) / (grid.size * grid.count / 2));
       if (alpha > 1) alpha = 1;
       if (alpha < 0) alpha = 0;
-
+      
       // Change the alpha of the rain billboards if we have a new alpha level
-      if (rain[index].alpha != alpha) {
-        rain[index].alpha = alpha;
-        mx.color_billboard(rainBillboardStartIndex + index, 1, 1, 1, rain[index].alpha);
+      if (type.billboardArr[index].alpha != alpha) {
+        type.billboardArr[index].alpha = alpha;
+        mx.color_billboard(type.indexStart + index, 1, 1, 1, type.billboardArr[index].alpha);
       }
       
       // If we need to move the grid point
-      if (rain[index].x != billboard_x || rain[index].z != billboard_z) {
-        rain[index].x = billboard_x;
-        rain[index].z = billboard_z;
-        mx.move_billboard(rainBillboardStartIndex + index, rain[index].x, 0, rain[index].z);
+      if (type.billboardArr[index].x != billboard_x || type.billboardArr[index].z != billboard_z) {
+        type.billboardArr[index].x = billboard_x;
+        type.billboardArr[index].z = billboard_z;
+        mx.move_billboard(type.indexStart + index, type.billboardArr[index].x, -2, type.billboardArr[index].z);
       }
+
   	}
   }
 }
 
-function hideRainBillboards() {
-  for (var i = rainBillboardStartIndex; i < rainBillboardStartIndex + gridarea; i++) {
+function hideRainBillboards(rainobj) {
+  for (var i = rainobj.indexStart; i < rainobj.indexStart + grid.area; i++) {
     mx.color_billboard(i, 1, 1, 1, 0);
   }
 }
