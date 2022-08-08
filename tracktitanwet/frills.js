@@ -95,6 +95,8 @@ const firstLapLength = mx.firstLapLength;
 const normalLapLength = mx.normalLapLength;
 
 var globalRunningOrder;
+var gateDropTime;
+var gateDropped = false;
 
 setUpWeatherSounds();
 
@@ -209,7 +211,7 @@ function doThunderAndLightning() {
     if (!intervals) return;
     rand = mulberry32SeedFromInterval(seconds * 1234, intervals[0], intervals[1]);
     timeLightningStrike = rand() + seconds;
-    mx.message("time of lightning strike: " + timeToString(timeLightningStrike));
+    mx.message("time of lightning strike: " + timeToString(timeLightningStrike - gateDropTime));
     gotTimeLightning = true;
   }
 
@@ -359,16 +361,23 @@ function getWeatherType() {
         }
       }
     }
+    mx.message("First weather type: " + weatherTypesArr[weatherIndicesForSession[0]]);
     initializedWeatherForSession = true;
   }
 
   var seconds = mx.seconds;
 
+  // Return the first weather index if the gate hasn't dropped
+  if (!gateDropped) {
+    gateDropTime = mx.get_gate_drop_time();
+    if (gateDropTime < 0) {
+      return weatherTypesArr[weatherIndicesForSession[0]];
+    }
+    gateDropped = true;
+  }
+  
   var weatherTimeLeft = durationOfWeatherType - (seconds - timeWeatherStarted);
-  /*if (mx.seconds - lastDisplay > 64 / 128 || mx.seconds < lastDisplay) {
-    mx.message("Time Left: " + timeToString(weatherTimeLeft));
-    lastDisplay = seconds;
-  }*/
+
   if (weatherTimeLeft <= 0) {
     weatherTypeIndex++;
     // if we reach the end of the weather array, reset the index to the beginning
@@ -380,22 +389,23 @@ function getWeatherType() {
     // Convert the weather type index to terms of lengths for the duration and times arrays
     var index = weatherTypeIndex + ((iterationThroughWeatherIndices - 1) * weatherIndicesForSession.length);
     if (index == weatherDurations.length) {
+      var seed = (gateDropTime * 1000) >> 3;
+      var timeStarted = 0;
+      if (index > 0) {
+        timeStarted = weatherDurations[index - 1] + timesWeatherStarted[index - 1];
+        seed = timeStarted * 12345;
+      }
       // Pick a weather duration seeded by the time if we don't have one already gotten
-      var rand = mulberry32SeedFromInterval(seconds * 12345, 60, 360);
+      var rand = mulberry32SeedFromInterval(seed, 60, 360);
       weatherDurations.push(rand());
       // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
-      timesWeatherStarted.push(seconds);
+      timesWeatherStarted.push(timeStarted);
       mx.message("Weather Durations: " + weatherDurations.toString());
       mx.message("Times Started: " + timesWeatherStarted.toString());
     }
     // Get the index of our durations and times started and store the current duration and time started
     durationOfWeatherType = weatherDurations[index];
     timeWeatherStarted = timesWeatherStarted[index];
-    // If someone's tabbed out for more then a frame, add to the duration of the previous weather type
-    var difference = timesWeatherStarted[index] - (weatherDurations[index - 1] + timesWeatherStarted[index - 1]);
-    if (difference > (1/128)) {
-      weatherDurations[index - 1] += difference;
-    }
     mx.message("weather type changed to: " + weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]]);
     mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
   }
