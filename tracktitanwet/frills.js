@@ -255,6 +255,12 @@ function doThunderAndLightning() {
 
     // Get the time since the lightning strike
     var timeSinceStrike = seconds - timeLightningStrike;
+    /* If someone tabbed out during a thunder pending session
+      and they tabbed back in past the max time pending, cancel the thunder. */
+    if (timeSinceStrike > maxTimeOfThunderPending) {
+      thunderPending = false;
+      return;
+    }
 
     // Get distance traveled by thunder
     var distanceTraveled = timeSinceStrike * SPEED_OF_SOUND;
@@ -267,7 +273,7 @@ function doThunderAndLightning() {
     if (distance - distanceTraveled <= 0) {
       // time it took for the thunder to reach the rider from the lightning origin
       var time = seconds - timeLightningStrike;
-      var vol = Math.ceil(baseThunderVolume / (1/4 * time));
+      var vol = Math.ceil(baseThunderVolume / (0.25 * time));
   
       mx.message("Thunder sound " + (time.toFixed(3)).toString() + " seconds after lightning!");
   
@@ -579,7 +585,7 @@ function doRain() {
       currentFadeInVolume = (fadeInVolPerSec * t);
       setRainSoundVolume(rainType, currentRainSoundIndex, currentFadeInVolume);
 
-      // TODO: Fade in rain animation
+      // Fade in rain animation
       var currentOpacity = (1 / FADE_IN_TIME * t);
       if (currentOpacity >= 0 && currentOpacity <= 1) {
         rainType == "light" ? moveRainBillboards(lightRain, currentOpacity) : rainType == "med" ? moveRainBillboards(mediumRain, currentOpacity) : moveRainBillboards(heavyRain, currentOpacity);
@@ -610,7 +616,7 @@ function doRain() {
       currentFadeOutVolume = startFadeOutVolume + (fadeOutVolPerSec * t);
       setRainSoundVolume(prevRainType, prevRainIndex, currentFadeOutVolume);
 
-      // TODO: Fade out rain animation
+      // Fade out rain animation
       var currentOpacity = 1 - (1 / FADE_IN_TIME * t);
       if (currentOpacity >= 0 && currentOpacity <= 1) {
         prevRainType == "light" ? moveRainBillboards(lightRain, currentOpacity) : prevRainType == "med" ? moveRainBillboards(mediumRain, currentOpacity) : moveRainBillboards(heavyRain, currentOpacity);
@@ -648,11 +654,10 @@ function cancelFade() {
     setRainSoundVolume(rainType, currentRainSoundIndex, vol);
     rainType == "light" ? moveRainBillboards(lightRain, 1) : rainType == "med" ? moveRainBillboards(mediumRain, 1) : moveRainBillboards(heavyRain, 1);
   }
-  if (prevRainType != undefined) {
-    mx.message("fade happening prev rain type: " + prevRainType.toString());
-    setRainSoundVolume(prevRainType, prevRainIndex, 0);
-    prevRainType == "light" ? hideRainBillboards(lightRain) : prevRainType == "med" ? hideRainBillboards(mediumRain) : hideRainBillboards(heavyRain);
-  }
+
+  // Hide all the billboards and mute all rain sounds except the current rain just in case we're catching up on multiple weather cycles
+  muteAllRainSounds(rainType);
+  hideAllRainBillboards(rainType);
 }
 
 function changeRainType(newRainType) {
@@ -742,6 +747,22 @@ function setRainSoundVolume(type, index, vol) {
   } 
 }
 
+function muteAllRainSounds(rainType) {
+  if (rainType != "light") lightRainSounds.forEach(muteIndex);
+  if (rainType != "med") medRainSounds.forEach(muteIndex);
+  if (rainType != "heavy") heavyRainSounds.forEach(muteIndex);
+}
+
+function muteIndex(index) {
+  mx.set_sound_vol(index, 0);
+}
+
+function hideAllRainBillboards(rainType) {
+  if (rainType != "light") hideRainBillboards(lightRain);
+  if (rainType != "med") hideRainBillboards(mediumRain);
+  if (rainType != "heavy") hideRainBillboards(heavyRain);
+}
+
 function stopRainSound(type, index) {
   if (type === "light") {
     mx.stop_sound(lightRainSounds[index]);
@@ -773,13 +794,13 @@ isEnoughBillboards = checkEnoughBillboards(lightRain);
 isEnoughBillboards = checkEnoughBillboards(mediumRain);
 isEnoughBillboards = checkEnoughBillboards(heavyRain);
 
+
 if (isEnoughBillboards) {
-  hideRainBillboards(lightRain);
-  hideRainBillboards(mediumRain);
-  hideRainBillboards(heavyRain);
-  for (var i = 0; i < grid.area; i++) {lightRain.billboardArr.push({x: -1, z: -1, alpha: -1});}
-  for (var i = 0; i < grid.area; i++) {mediumRain.billboardArr.push({x: -1, z: -1, alpha: -1});}
-  for (var i = 0; i < grid.area; i++) {heavyRain.billboardArr.push({x: -1, z: -1, alpha: -1});}
+  // hide every billboard
+  hideAllRainBillboards(undefined);
+  for (var i = 0; i < grid.area; i++) {lightRain.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});}
+  for (var i = 0; i < grid.area; i++) {mediumRain.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});}
+  for (var i = 0; i < grid.area; i++) {heavyRain.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});}
 }
 function checkEnoughBillboards(type) {
   if (type.indexStart > -1) {
@@ -804,36 +825,55 @@ function checkEnoughBillboards(type) {
   }
 }
 
+const billboardMaxHeight = 80;
+
 function moveRainBillboards(type, alphaStart) {
   if (!isEnoughBillboards) return;
   for (var z = 0; z < grid.count; z++) {
   	for (var x = 0; x < grid.count; x++) {
-      var camx = pos[0], camz = pos[2];
+      var camx = pos[0], camy = pos[1], camz = pos[2];
   		var billboard_x = Math.floor((camx / grid.size) - (grid.count / 2.0) + 0.5 + x) * grid.size;
   		var billboard_z = Math.floor((camz / grid.size) - (grid.count / 2.0) + 0.5 + z) * grid.size;
 
-      var index = x + z * grid.count;
-
       // probably a good idea to fade out to hide popping
-  		var dx = type.billboardArr[index].x - camx;
-  		var dz = type.billboardArr[index].z - camz;
+  		var dx = billboard_x - camx;
+  		var dz = billboard_z - camz;
   		var alpha = alphaStart - (Math.sqrt(dx * dx + dz * dz) / (grid.size * grid.count / 2));
       if (alpha > 1) alpha = 1;
       if (alpha < 0) alpha = 0;
+
+      var index = x + z * grid.count;
       
       // Change the alpha of the rain billboards if we have a new alpha level
       if (type.billboardArr[index].alpha != alpha) {
         type.billboardArr[index].alpha = alpha;
         mx.color_billboard(type.indexStart + index, 1, 1, 1, type.billboardArr[index].alpha);
       }
+
+      var camHeightAboveTerrain = camy - mx.get_elevation(camx, camz);
+      var moveY = false;
       
-      // If we need to move the grid point
-      if (type.billboardArr[index].x != billboard_x || type.billboardArr[index].z != billboard_z) {
-        type.billboardArr[index].x = billboard_x;
-        type.billboardArr[index].z = billboard_z;
-        mx.move_billboard(type.indexStart + index, type.billboardArr[index].x, -2, type.billboardArr[index].z);
+      if (camHeightAboveTerrain <= (billboardMaxHeight / 2) && type.billboardArr[index].y != 0) {
+        type.billboardArr[index].y = 0;
+        moveY = true;
       }
 
+      /* Put the billboard Y level so it's centered in the middle of the billboard,
+      so the billboard height is camheight - billboardMaxHeight / 2 */
+
+      if (camHeightAboveTerrain > billboardMaxHeight / 2) {
+        type.billboardArr[index].y = camHeightAboveTerrain - (billboardMaxHeight / 2);
+        moveY = true;
+      }
+
+      // If we need to move the grid point
+      if (type.billboardArr[index].x != billboard_x || type.billboardArr[index].z != billboard_z || moveY) {
+        type.billboardArr[index].x = billboard_x;
+        type.billboardArr[index].z = billboard_z;
+        mx.move_billboard(type.indexStart + index, type.billboardArr[index].x, type.billboardArr[index].y, type.billboardArr[index].z);
+      }
+      
+      moveY = false;
   	}
   }
 }
