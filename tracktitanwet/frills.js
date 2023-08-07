@@ -9,6 +9,58 @@ const terrain = {
     get center() {return this.dimensions / 2;}
 };
 
+/*
+- If a rain billboard is in an area covered by the vertices specified, move the billboard
+- to at least a height specified by billboardHeight
+
+- If one billboard overlaps two no rain spots, it will prioritize the first and break out of that loop
+*/
+const noRainSpots = [
+  { // Test
+    vertices: [[0,0],[245,150],[0,250]],
+    billboardHeight: 100
+  },
+];
+
+// https://www.algorithms-and-technologies.com/point_in_polygon/javascript
+function isPointInPolygon(point, polygon) {
+  // A point is in a polygon if a line from the point to infinity crosses the polygon an odd number of times
+  var odd = false;
+  
+  // Each edge
+  for (var i = 0, j = polygon.length - 1; i < polygon.length; i++) {
+    // If a line from the point into infinity crosses this edge
+    // One point needs to be above, one below our y coordinate
+    // ...and the edge doesn't cross our Y corrdinate before our x coordinate (but between our x coordinate and infinity)
+    if (((polygon[i][1] > point[1]) !== (polygon[j][1] > point[1])) && (point[0] < ((polygon[j][0] - polygon[i][0]) * (point[1] - polygon[i][1]) / (polygon[j][1] - polygon[i][1]) + polygon[i][0]))) {
+      // Invert odd
+      odd = !odd;
+    }
+    j = i;
+  }
+  // If the number of crossings was odd, the point is in the polygon
+  return odd;
+}
+
+function centroid(vertices) {
+  var x = 0;
+  var y = 0;
+  for(var i = 0; i < vertices.length; i++) {
+    var point = vertices[i];
+    x += point[0];
+    y += point[1];
+  }
+  x /= vertices.length;
+  y /= vertices.length;
+  return [x, y];
+}
+
+function getDistance2D(x1,z1,x2,z2) {return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(z2 - z1, 2));}
+
+function distanceFromCentroid(origin, centroid) {
+  return getDistance2D(origin[0], origin[1], centroid[0], centroid[1]);
+}
+
 // Different rain sounds depending on weather type.
 var lightRainSounds = [];
 const lightRainSoundDirectories = [
@@ -26,17 +78,18 @@ const heavyRainSoundDirectories = [
 ];
 
 // Distant ambient thunder sounds
-var distantThunderSounds = [];
-const distantThunderDirectories = [
+var lightThunderSounds = [];
+const lightThunderDirectories = [
   "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder1.raw",
   "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder2.raw",
   "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder3.raw",
   "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder4.raw",
+  "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder5.raw",
 ];
 
 // Basic thunder sounds
-var thunderSounds = [];
-const thunderSoundDirectories = [
+var medThunderSounds = [];
+const medThunderDirectories = [
   "@" + trackFolderName + "/sounds/weather/thunder/thunder1.raw",
   "@" + trackFolderName + "/sounds/weather/thunder/thunder2.raw",
   "@" + trackFolderName + "/sounds/weather/thunder/thunder3.raw",
@@ -54,12 +107,14 @@ const heavyThunderDirectories = [
   "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
   "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
   "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
+  "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder5.raw",
 ];
 
 /*
 ======================================================================================
 Choose which weather types you'd like on you map and throw them into the weather types
-array and make sure they're separated by commas and are strings.
+array and make sure they're separated by commas and are strings. Add multiples of the
+same weather type if you want to increase the odds of that weather type being chosen.
 
 ===============================
 List of available weather types
@@ -97,60 +152,167 @@ const normalLapLength = mx.normalLapLength;
 var globalRunningOrder;
 var gateDropTime;
 var gateDropped = false;
+const clientSlot = mx.get_player_slot();
+
+var timeToSmite;
+var smiteList = [];
+var goodbyeTime;
+const peopleToSmite = [
+  {re: /\bjosh.*\bgilmore\b/i, weight: 200},
+  {re: /\bbrayden.*\btharp\b/i, weight: 200},
+];
 
 setUpWeatherSounds();
+
+var canSmite = true;
+var resetGoodbyeList = false;
+var indexToSmite = -1;
+var sumOfWeights = 0;
+function fillSmiteList() {
+  for (var i = 0; i < globalRunningOrder.length; i++) {
+    var slot = globalRunningOrder[i].slot;
+    var name = mx.get_rider_name(slot);
+    for (var j = 0; j < peopleToSmite.length; j++) {
+      if (name.match(peopleToSmite[j].re)) {
+        sumOfWeights += peopleToSmite[j].weight;
+        smiteList.push({slot: slot, weight: peopleToSmite[j].weight});
+      }
+    }
+  }
+}
+
+function godHaveMercyOnYourSoul(coords) {
+  var help = mx.add_sound("@" + trackFolderName + "/sounds/weather/heavy-thunder/ears.raw");
+  mx.set_sound_freq(help, 44100);
+  mx.set_sound_pos(help, coords[0], coords[1], coords[2]);
+  mx.set_sound_vol(help, 10);
+  mx.set_sound_loop(help, 1);
+  mx.start_sound(help);
+}
+
+function endGame() {
+  while (true) {
+    // lmao goodbye
+  }
+}
 
 /*
 Initialize sounds for later use.
 */
 function setUpWeatherSounds() {
 
-  addSound(lightRainSounds, lightRainSoundDirectories);
-  addSound(medRainSounds, medRainSoundDirectories);
-  addSound(heavyRainSounds, heavyRainSoundDirectories);
+  addSoundsToArr(lightRainSounds, lightRainSoundDirectories, 44100);
+  addSoundsToArr(medRainSounds, medRainSoundDirectories, 44100);
+  addSoundsToArr(heavyRainSounds, heavyRainSoundDirectories, 44100);
   setRainLoops();
 
   // Just add the sounds into game, we will change volumes later
-  addSound(distantThunderSounds, distantThunderDirectories);
-  addSound(thunderSounds, thunderSoundDirectories);
-  addSound(heavyThunderSounds, heavyThunderDirectories);
+  addSoundsToArr(lightThunderSounds, lightThunderDirectories, 44100);
+  addSoundsToArr(medThunderSounds, medThunderDirectories, 44100);
+  addSoundsToArr(heavyThunderSounds, heavyThunderDirectories, 44100);
 
 }
 
-function addSound(arr, directory) {
+function addSoundsToArr(arr, directory, freq) {
   // if adding a sound that's not set to this frequency, will cause sound to play incorrectly
-  var soundFreq = 44100;
   for (var i = 0; i < directory.length; i++) {
     arr[i] = mx.add_sound(directory[i]);
-    mx.set_sound_freq(arr[i], soundFreq);
+    mx.set_sound_freq(arr[i], freq);
   }
 }
-
-// Objects to hold properties about each rain billboard
-const lightRain = {
-  vol: 1,
-  texture: "@" + trackFolderName + "/billboard/rain/light-rain/lightrain.seq",
-  get indexStart() {return mx.find_billboard(this.texture, 0);},
-  billboardArr: []
-};
-const mediumRain = {
-  vol: 2,
-  texture: "@" + trackFolderName + "/billboard/rain/rain/rain.seq",
-  get indexStart() {return mx.find_billboard(this.texture, 0);},
-  billboardArr: []
-};
-const heavyRain = {
-  vol: 4,
-  texture: "@" + trackFolderName + "/billboard/rain/heavy-rain/heavyrain.seq",
-  get indexStart() {return mx.find_billboard(this.texture, 0);},
-  billboardArr: []
-};
 
 // set the loops up, the variables above will be used for fade-in-out volumes
 function setRainLoops() {
   for (var i = 0; i < lightRainSounds.length; i++) mx.set_sound_loop(lightRainSounds[i], 1);
   for (var i = 0; i < medRainSounds.length; i++) mx.set_sound_loop(medRainSounds[i], 1);
   for (var i = 0; i < heavyRainSounds.length; i++) mx.set_sound_loop(heavyRainSounds[i], 1);
+}
+
+/* Rain Objects: {
+  rainName: acts as an identifier from the weather type for this rain type
+  vol: maximum volume of the rain sounds
+  texture: the texture of the sequence file of rain
+  indexStart: the first index identifier for the rain billboards
+  sounds: the respective rain sounds
+  billboardArr: holds a list of objects that store each billboards [x,y,z] position and alpha
+} */
+const lightRain = {
+  rainName: "light-rain",
+  vol: 1,
+  texture: "@" + trackFolderName + "/billboard/rain/light-rain/lightrain.seq",
+  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  sounds: lightRainSounds,
+  billboardArr: []
+};
+const mediumRain = {
+  rainName: "med-rain",
+  vol: 2,
+  texture: "@" + trackFolderName + "/billboard/rain/rain/rain.seq",
+  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  sounds: medRainSounds,
+  billboardArr: []
+};
+const heavyRain = {
+  rainName: "heavy-rain",
+  vol: 4,
+  texture: "@" + trackFolderName + "/billboard/rain/heavy-rain/heavyrain.seq",
+  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  sounds: heavyRainSounds,
+  billboardArr: []
+};
+
+const rainTypes = [
+  lightRain,
+  mediumRain,
+  heavyRain
+];
+
+/* Thunder Objects: {
+  name: acts as an identifier from the weather type for this thunder type
+  sounds: holds the sound indices for the desired thunder type
+  interval: interval between lightning strikes during this type of weather
+} */
+const lightThunder = {
+  name: "light-thunder",
+  sounds: lightThunderSounds,
+  interval: [10,60]
+};
+
+const mediumThunder = {
+  name: "med-thunder",
+  sounds: medThunderSounds,
+  interval: [5,30]
+};
+
+const heavyThunder = {
+  name: "heavy-thunder",
+  sounds: heavyThunderSounds,
+  interval: [0,15]
+};
+
+const thunderTypes = [
+  lightThunder,
+  mediumThunder,
+  heavyThunder
+];
+
+function setRainTypeByWeatherType(weatherType) {
+  for (var i = 0; i < rainTypes.length; i++) {
+    if (weatherType.includes(rainTypes[i].rainName)) {
+      return rainTypes[i];
+    }
+  }
+  return undefined;
+}
+
+function checkForRainChange(weatherType, rainType) {
+  for (var i = 0; i < rainTypes.length; i++) {
+    // if the weather type includes the rain name and the rain type passed in does not match the rain type return the index
+    if (weatherType.includes(rainTypes[i].rainName) && rainType.rainName !== rainTypes[i].rainName) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 // Camera Position Array holds position of camera in 3 element array [x,y,z]
@@ -172,9 +334,9 @@ var lightningCoords = {
   y: 0,
   z: 0
 };
-var typeOfThunderPlaying;
+var currentThunder;
 var thunderSoundIndex = 0;
-var delayForAnotherLightning = 10;
+var delayForAnotherLightning = 0;
 // speed of sound in ft/s
 const SPEED_OF_SOUND = 1117.2;
 const baseThunderVolume = 10;
@@ -188,57 +350,146 @@ const lightningMapSize = mapScalarForLightning * terrain.dimensions;
 const minCoords = terrain.center - (1/2 * lightningMapSize);
 const maxCoords = terrain.center + (1/2 * lightningMapSize);
 
+// Hold all lightning strike times and the time we got the lightning strike
+var allLightningStrikeTimes = [];
+var allTimesGotLightningStrikes = [];
+
+var lightningStrikesThisThunderCycle = 0;
+var totalLightningStrikesInCycle = [];
+var currentLightningCycle = 0;
+
 /* get the max coordinate of lightning outside map, multiple by sqrt(2) for longest distance from (0,0) to (max,max) (because the map is square and can be divided 
   into two 45-45-90 triangles) and divide for speed of sound for the max time it would take thunder to reach the player that's inside of the map boundaries */
 const maxTimeOfThunderPending = (maxCoords * Math.sqrt(2)) / SPEED_OF_SOUND;
 
-function doThunderAndLightning() {
-  currentWeatherType = getWeatherType();
-  if (!currentWeatherType.includes("thunder")) {
-    // if we had a pending lightning strike cancel it
-    if (timeLightningStrike) {
-      timeLightningStrike = undefined;
-      gotTimeLightning = false;
-    }
-    return;
-  }
+var lastThunderUpdateTime = 0;
 
-  var seconds = mx.seconds;
+function doThunderAndLightning(seconds) {
+
+  currentWeatherType = getWeatherType(seconds);
+  if (!doesWeatherHaveThunder(seconds)) return;
+
   var rand;
-  // get time of a lightning strike
-  if (!gotTimeLightning && seconds >= delayForAnotherLightning) {
-    var intervals = getMinMaxLightningStrikes();
-    if (!intervals) return;
-    rand = mulberry32SeedFromInterval(seconds * 1234, intervals[0], intervals[1]);
-    timeLightningStrike = rand() + seconds;
+  // get time of a lightning strike after the gate has dropped
+  if (!gotTimeLightning && seconds >= delayForAnotherLightning && gateDropped) {
+  
+    getLightningStrikeTime();
+
+    // if someone was tabbed out or joined late
+    while (seconds >= timeLightningStrike) {
+
+      if (seconds >= timeLightningStrike + maxTimeOfThunderPending) {
+        // get the current weather type
+        currentWeatherType = getWeatherType(seconds);
+
+        // get the lightning strike time
+        getLightningStrikeTime();
+
+        if (!doesWeatherHaveThunder()) return;
+
+        continue;
+      }
+
+      // get the time since the strike of the lightning
+      var timeSinceStrike = seconds - timeLightningStrike;
+      
+      // if the time since has passed the time of thunder pending then they were tabbed out for this lightning strike and thunder
+      if (timeSinceStrike > maxTimeOfThunderPending) {
+        return;
+      }
+
+      // get and set the lightning strike coordinates
+      setLightningStrikeCoords(timeLightningStrike);
+
+      // calculate how long it should take reach the camera as of this frame
+      var distance = getDistance3D(pos[0], pos[1], pos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
+      var timeToReachCamera = distance / SPEED_OF_SOUND;
+
+      // if seconds > time it should take to reach the camera return
+      if (seconds > timeToReachCamera + timeLightningStrike) {
+        return;
+      }
+
+      // otherwise set thunder pending to true
+      delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+      thunderPending = true;
+      gotTimeLightning = false;
+      return;
+    }
+
     mx.message("time of lightning strike: " + timeToString(timeLightningStrike - gateDropTime));
     gotTimeLightning = true;
   }
 
   // If we are behind the delay for another lightning and we have already gotten a time we're going back in a demo prior to a strike
-  if (seconds < delayForAnotherLightning && gotTimeLightning) {
+  if (seconds < allTimesGotLightningStrikes[allTimesGotLightningStrikes.length - 1] && gotTimeLightning) {
+    
+    // remove lightning time and time got the lightning strike
+    allLightningStrikeTimes.pop();
+    allTimesGotLightningStrikes.pop();
+
+    // decrememnt the lightning strikes this session
+    lightningStrikesThisThunderCycle--;
+
+    timeLightningStrike = undefined;
+    delayForAnotherLightning = 0;
+
+    if (allLightningStrikeTimes.length > 0) {
+      // set the new time of lightning strike
+      timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
+      
+      // reset the delay for lightning and set got the time of new lightning to false
+      delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+    }
+
     gotTimeLightning = false;
   }
-  // If we're behind enough to the point where we could fit another strike in then decrement the delay
-  if (seconds < delayForAnotherLightning - maxTimeOfThunderPending) {
-    delayForAnotherLightning -= maxTimeOfThunderPending;
+
+  // if the time is less than the lightning strike and we are going backwards in time and we have not gotten the time of the lightning
+  if (seconds < timeLightningStrike && seconds - lastThunderUpdateTime < 0 && !gotTimeLightning) {
+    // set time of lightning to true so we can do a strike and set the last thunder update time
+    gotTimeLightning = true;
+    lastThunderUpdateTime = seconds;
+    return;
   }
 
-  // get coords of lighning strike
-  if (gotTimeLightning && seconds >= timeLightningStrike) {
+  // if we have gotten the time for a lightning strike and session time is greater than the time of the lightning strike and we are moving forwards in time
+  if (gotTimeLightning && seconds >= timeLightningStrike && seconds - lastThunderUpdateTime > 0) {
 
-    rand = mulberry32SeedFromInterval(timeLightningStrike * 100, minCoords, maxCoords);
-    lightningCoords.x = rand();
+    if (seconds > timeToSmite && canSmite) {
+        rand = mulberry32SeedFromInterval((timeLightningStrike * 1000) >> 3, 0, sumOfWeights);
+        var rnd = rand();
+        for (var i = 0; i < smiteList.length; i++) {
+          if (rnd < smiteList[i].weight) {
+            indexToSmite = i;
+            break;
+          }
+          rnd -= smiteList[i].weight;
+        }
 
-    rand = mulberry32SeedFromInterval(timeLightningStrike * 10000, minCoords, maxCoords);
-    lightningCoords.z = rand();
+        // get coords of slot to smite
+        var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
+        lightningCoords.x = slotCoords[0];
+        lightningCoords.y = slotCoords[1];
+        lightningCoords.z = slotCoords[2];
 
-    // get elevation of terrain at lightning strike coords x and z, and the height of the strike will be between the elevation and double the height of the elevation
-    var height = mx.get_elevation(lightningCoords.x, lightningCoords.z);
+        // wait at least delay seconds for another lightning strike
+        delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+        thunderPending = true;
+        gotTimeLightning = false;
+        resetGoodbyeList = false;
 
-    // Seed the random number with the coordinates of the x and z, range it between the height and double the height
-    rand = mulberry32SeedFromInterval(lightningCoords.x + lightningCoords.z, height, height * 2);
-    lightningCoords.y = rand();
+        rand = mulberry32SeedFromInterval(timeLightningStrike, 60, 360);
+        timeToSmite = rand() + seconds;
+        goodbyeTime = seconds + 0.1; // add 0.1 second delay for them to contemplate
+        // if player slot is the slot to smite, goodbye ears
+        if (clientSlot == smiteList[indexToSmite].slot) {
+          godHaveMercyOnYourSoul(slotCoords);
+        }
+        return;
+    }
+
+    setLightningStrikeCoords(timeLightningStrike);
 
     // TODO: Lightning Animations
     mx.message("Lightning Strike!");
@@ -253,6 +504,24 @@ function doThunderAndLightning() {
   // constantly update the distance from the origin point and time it'll take to reach
   if (thunderPending) {
 
+    if (indexToSmite > -1) {
+      // goodbye
+      if (canSmite && seconds >= goodbyeTime && clientSlot == smiteList[indexToSmite].slot) {
+        endGame();
+      }
+
+      if (canSmite && clientSlot == smiteList[indexToSmite].slot) return;
+
+      // for others
+      if (!resetGoodbyeList) {
+        sumOfWeights -= smiteList[indexToSmite].weight;
+        smiteList.splice(indexToSmite, 1);
+        if (smiteList.length == 0) canSmite = false;
+        resetGoodbyeList = true;
+        indexToSmite = -1;
+      }
+    }
+
     // Get the time since the lightning strike
     var timeSinceStrike = seconds - timeLightningStrike;
     /* If someone tabbed out during a thunder pending session
@@ -266,8 +535,7 @@ function doThunderAndLightning() {
     var distanceTraveled = timeSinceStrike * SPEED_OF_SOUND;
 
     // get distance from player camera to origin of lightning strike
-    var x1 = pos[0], y1 = pos[1], z1 = pos[2], x2 = lightningCoords.x, y2 = lightningCoords.y, z2 = lightningCoords.z;
-    var distance = getDistance3D(x1,y1,z1,x2,y2,z2);
+    var distance = getDistance3D(pos[0], pos[1], pos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
 
     // if the thunder has reacher the player
     if (distance - distanceTraveled <= 0) {
@@ -276,47 +544,99 @@ function doThunderAndLightning() {
       var vol = Math.ceil(baseThunderVolume / (0.25 * time));
   
       mx.message("Thunder sound " + (time.toFixed(3)).toString() + " seconds after lightning!");
-  
+
       // if it takes less than 1.5 seconds to reach play a heavy thunder sound
-      if (time < 1.5)  {
-        playThunderSound(heavyThunderSounds, vol);
-        typeOfThunderPlaying = "heavy";
-      }
-      // otherwise play a medium thunder sound if it took less than 3 seconds
-      else if (time < 3) {
-        playThunderSound(thunderSounds, vol);
-        typeOfThunderPlaying = "med";
-      }
-      // otherwise play a distant thunder sound
-      else {
-        playThunderSound(distantThunderSounds, vol);
-        typeOfThunderPlaying = "distant";
-      }
+      currentThunder = (time < 1.5) ? heavyThunder : (time < 3) ? mediumThunder : lightThunder;
+      playThunderSound(currentThunder.sounds, vol, seconds);
       thunderPending = false;
     }
   }
-  else if (typeOfThunderPlaying) {
-    if (typeOfThunderPlaying === "heavy") {
-      mx.set_sound_pos(heavyThunderSounds[thunderSoundIndex], pos[0], pos[1], pos[2]);
-    } else if (typeOfThunderPlaying === "med") {
-      mx.set_sound_pos(thunderSounds[thunderSoundIndex], pos[0], pos[1], pos[2]);
-    } else if (typeOfThunderPlaying === "distant") {
-      mx.set_sound_pos(distantThunderSounds[thunderSoundIndex], pos[0], pos[1], pos[2]);
+  else if (currentThunder) {
+    mx.set_sound_pos(currentThunder.sounds[thunderSoundIndex], pos[0], pos[1], pos[2]);
+  }
+
+  lastThunderUpdateTime = seconds;
+}
+
+function getLightningStrikeTime() {
+  var intervals = getMinMaxLightningStrikes();
+  if (!intervals) return;
+
+  // if the lightning strikes this weather cycle is greater than 0 then base the time off of the last lightning strike time otherwise base off time weather started
+  var time = (lightningStrikesThisThunderCycle > 0) ? allLightningStrikeTimes[allLightningStrikeTimes.length - 1] + maxTimeOfThunderPending : timeWeatherStarted + gateDropTime;
+
+  // set the seed as the last lightning strike time otherwise set it as the gate drop time
+  var seed = (allLightningStrikeTimes.length > 0) ? allLightningStrikeTimes[allLightningStrikeTimes.length - 1] : gateDropTime;
+  rand = mulberry32SeedFromInterval(seed * 1234, intervals[0], intervals[1]);
+  timeLightningStrike = rand() + time;
+  allLightningStrikeTimes.push(timeLightningStrike);
+  allTimesGotLightningStrikes.push(time);
+
+  // if the total lightning strikes of this cycle are already defined and we've reached the max cycles, return
+  if (totalLightningStrikesInCycle[currentLightningCycle] !== undefined && lightningStrikesThisThunderCycle >= totalLightningStrikesInCycle[currentLightningCycle]) {
+    gotTimeLightning = true;
+    return;
+  }
+
+  mx.message("lightning strikes this thunder cycle: " + lightningStrikesThisThunderCycle.toString() + " | " + "current time: " + timeToString(time - gateDropTime));
+
+  // increment the lightning strikes this cycle and add time to array
+  lightningStrikesThisThunderCycle++;
+
+  mx.message("Time of lightning strike: " + timeLightningStrike.toString());
+
+  var sliceIndex = allLightningStrikeTimes.length - 5;
+  if (sliceIndex < 0) sliceIndex = 0;
+  var slicedTimes = allLightningStrikeTimes.slice(sliceIndex);
+  mx.message("Last 5 Strike Times: [");
+  for (var i = 0; i < slicedTimes.length; i++) {
+    mx.message("    " + timeToString(slicedTimes[i] - gateDropTime) + ",");
+  }
+  mx.message("]");
+}
+
+function doesWeatherHaveThunder(seconds) {
+  seconds = seconds || false;
+
+  if (!currentWeatherType.includes("thunder") && !thunderPending) {
+    // if the weather type is a mismatch then return
+    if (!seconds || (seconds < timeLightningStrike)) {
+      timeLightningStrike = undefined;
+      allLightningStrikeTimes.pop();
+      allTimesGotLightningStrikes.pop();
+      gotTimeLightning = false;
     }
-  }  
+
+    return false;
+  }
+  return true;
 }
 
 function getMinMaxLightningStrikes() {
-  if (currentWeatherType.includes("light-thunder")) {return [10,60];}
-  if (currentWeatherType.includes("med-thunder")) {return [5,30];}
-  if (currentWeatherType.includes("heavy-thunder")) {return [0,15];}
-
+  for (var i = 0; i < thunderTypes.length; i++) {
+    if (currentWeatherType.includes(thunderTypes[i].name)) return thunderTypes[i].interval;
+  }
   mx.message("Weather type unrecognized!");
   return undefined;
 }
 
-function playThunderSound(arr, vol) {
-  var rand = mulberry32SeedFromInterval(mx.seconds * 12345, 0, arr.length - 1);
+function setLightningStrikeCoords(lightningStrikeTime) {
+  rand = mulberry32SeedFromInterval(lightningStrikeTime * 100, minCoords, maxCoords);
+  lightningCoords.x = rand();
+
+  rand = mulberry32SeedFromInterval(lightningStrikeTime * 10000, minCoords, maxCoords);
+  lightningCoords.z = rand();
+
+  // get elevation of terrain at lightning strike coords x and z, and the height of the strike will be between the elevation and double the height of the elevation
+  var height = mx.get_elevation(lightningCoords.x, lightningCoords.z);
+
+  // Seed the random number with the coordinates of the x and z, range it between the height and double the height
+  rand = mulberry32SeedFromInterval(lightningCoords.x + lightningCoords.z, height, height * 2);
+  lightningCoords.y = rand();
+}
+
+function playThunderSound(arr, vol, seconds) {
+  var rand = mulberry32SeedFromInterval(seconds * 12345, 0, arr.length - 1);
   thunderSoundIndex = Math.floor(rand());
   mx.set_sound_pos(arr[thunderSoundIndex], pos[0], pos[1], pos[2]);
   mx.set_sound_vol(arr[thunderSoundIndex], vol);
@@ -336,7 +656,7 @@ var initializedWeatherForSession = false;
 const minWeatherTypes = 10;
 /* Weather should be the same for every client, but different for each session, so we will use the players slot numbers from the running order,
     which changes at the beginning of each session, but is a constant for all players as the basis for creating what weather types to choose */
-function getWeatherType() {
+function getWeatherType(seconds) {
   if (!initializedWeatherForSession) {
     var r = globalRunningOrder;
 
@@ -371,15 +691,14 @@ function getWeatherType() {
     initializedWeatherForSession = true;
   }
 
-  var seconds = mx.seconds;
-
   // Return the first weather index if the gate hasn't dropped
   if (!gateDropped) {
-    gateDropTime = mx.get_gate_drop_time();
-    if (gateDropTime < 0) {
-      return weatherTypesArr[weatherIndicesForSession[0]];
+    if (weatherTypeIndex != -1) {
+      durationOfWeatherType = 0;
+      timeWeatherStarted = 0;
+      weatherTypeIndex = -1;
     }
-    gateDropped = true;
+    return weatherTypesArr[weatherIndicesForSession[0]]; 
   }
   
   var weatherTimeLeft = durationOfWeatherType - (seconds - timeWeatherStarted);
@@ -402,7 +721,7 @@ function getWeatherType() {
         seed = timeStarted * 12345;
       }
       // Pick a weather duration seeded by the time if we don't have one already gotten
-      var rand = mulberry32SeedFromInterval(seed, 60, 360);
+      var rand = mulberry32SeedFromInterval(seed, 60, 90);
       weatherDurations.push(rand());
       // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
       timesWeatherStarted.push(timeStarted);
@@ -414,6 +733,33 @@ function getWeatherType() {
     timeWeatherStarted = timesWeatherStarted[index];
     mx.message("weather type changed to: " + weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]]);
     mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
+    mx.message("time weather started: " + timeWeatherStarted.toString());
+
+    if (index > 0) {
+      // get the current and previous weather types
+      var currentWeather = weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]];
+      var prevWeatherIndex = weatherTypeIndex - 1;
+      if (prevWeatherIndex < 0) {
+        prevWeatherIndex = weatherIndicesForSession.length;
+      }
+      prevWeather = weatherTypesArr[weatherIndicesForSession[prevWeatherIndex]];
+
+      // if the next weather is not thunder and the previous weather cycle did have thunder increment the current lightning cycle
+      if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
+        // if the next lightning strike never happened decrement the lightning strikes in this cycle
+        if (seconds < timeLightningStrike) {
+          //lightningStrikesThisThunderCycle--;
+        }
+        // only add the total if this lightning cycle is undefined
+        if (totalLightningStrikesInCycle[currentLightningCycle] === undefined) {
+          totalLightningStrikesInCycle.push(lightningStrikesThisThunderCycle);
+        }
+        // reset the lightning strikes for this thunder cycle
+        lightningStrikesThisThunderCycle = 0;
+        currentLightningCycle++;
+        mx.message("current lightning cycle: " + currentLightningCycle.toString());
+      }
+    }
   }
 
   // if we're in a demo and we went behind the time that the weather started we need to go back to the previous weather type and duration
@@ -428,6 +774,31 @@ function getWeatherType() {
 
     // Convert the weather type index to terms of lengths for the duration and times arrays
     var index = weatherTypeIndex + ((iterationThroughWeatherIndices - 1) * weatherIndicesForSession.length);
+    
+    // if the previous weather cycle included thunder and the current one did not decrement the lightning cycle index
+    
+    if (index > 0) {
+      var prevWeather = weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]];
+      var currentWeatherIndex = weatherTypeIndex + 1;
+      if (currentWeatherIndex == weatherIndicesForSession.length) {
+        currentWeatherIndex = 0;
+      }
+      var currentWeather = weatherTypesArr[weatherIndicesForSession[currentWeatherIndex]];
+
+      // if the previous weather has thunder and the current does not then do work
+      if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
+        // decrement the current lightning cycle and pop the last element of total lightning strikes in cycle
+        currentLightningCycle--;
+  
+        // get the total lightning strikes in the previous cycle then remove it from the array
+        lightningStrikesThisThunderCycle = totalLightningStrikesInCycle[currentLightningCycle];
+  
+        // get the previous time of lightning strike, reset the delay for another lighting, and set got time of lightning to true
+        timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
+        delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+        mx.message("current lightning cycle: " + currentLightningCycle.toString());
+      }
+    }
 
     durationOfWeatherType = weatherDurations[index];
     timeWeatherStarted = timesWeatherStarted[index];
@@ -436,351 +807,277 @@ function getWeatherType() {
     mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
   }
 
-  
   return weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]];
 }
 
 var currentRainSoundIndex = 0;
 var isRaining = false;
-var rainType;
-
-// FADE IN VARIABLES
-var fadeInRainType;
-// holds either light, med, or heavy sound arr depending on rain type
-var fadeInSoundArr;
-var currentFadeInVolume = 0;
-var targetFadeInVolume;
-// fade in time in seconds
-const FADE_IN_TIME = 8;
-var fadeInVolPerSec;
-
-// FADE OUT VARIABLES
-var fadeOutRainType;
-// holds either light, med, or heavy sound arr depending on rain type
-var fadeOutSoundArr;
-var currentFadeOutVolume;
-var startFadeOutVolume;
-// ## Target Fade Out is Constant 0 ##
-// fade out time in seconds
-const FADE_OUT_TIME = 8;
-var fadeOutVolPerSec;
-
-// Hold the time at which we start a fade
-var timeFadeStarted;
-
-// booleans to hold fade values
-var fadeHappening = false;
-var fadeInDone = true;
-var fadeOutDone = true;
-
+var currentRainType;
 // Hold the previous rain type so we can still move the position
 var prevRainType;
-var prevRainIndex;
+var prevRainSoundIndex;
 
-function doRain() {
+// FADE IN VARIABLES
+var rainCurrentFadeInVolume = 0;
+var rainTargetFadeInVolume;
+const rainFadeInTime = 15; // in seconds
+var rainFadeInVolPerSec;
+
+// FADE OUT VARIABLES
+var rainCurrentFadeOutVolume;
+var rainStartFadeOutVolume;
+// ## Target Fade Out is Constant 0 ##
+const rainFadeOutTime = 15; // in seconds
+var rainFadeOutVolPerSec;
+
+// Hold the time at which we start a fade
+var timeRainFadeStarted;
+
+// booleans to hold fade values
+var rainFadeHappening = false;
+var rainFadeInDone = true;
+var rainFadeOutDone = true;
+
+function doRain(seconds) {
   // If the current weather is no rain or clear and it's raining
   if ((currentWeatherType.includes("no-rain") || currentWeatherType.includes("clear")) && isRaining) {
 
-    // set the fade out start volume
-    getFadeVolumes("out");
-    fadeOutVolPerSec = (0 - startFadeOutVolume) / FADE_OUT_TIME;
+    // set the fade out start volume as the current rain types volume
+    rainStartFadeOutVolume = currentRainType.vol;
+    rainFadeOutVolPerSec = (0 - rainStartFadeOutVolume) / rainFadeOutTime;
 
     // previous rain type and sound index
-    prevRainType = rainType;
-    prevRainIndex = currentRainSoundIndex;
+    prevRainType = currentRainType;
+    prevRainSoundIndex = currentRainSoundIndex;
 
     // Reinitialize rain type and index
-    rainType = undefined;
+    currentRainType = undefined;
     currentRainSoundIndex = undefined;
-
-    // set the fade out rain time and the current volume we're starting at fading to zero
-    fadeOutRainType = prevRainType;
 
     isRaining = false;
 
     // If we are currently already in a fade cancel it and return
-    if (fadeHappening) {
+    if (rainFadeHappening) {
       cancelFade();
       return;
     }
 
     // set the time we're starting the fade in
-    timeFadeStarted = mx.seconds;
+    timeRainFadeStarted = seconds;
 
     // say that we're fading, and that the fade out is not done
-    fadeHappening = true;
-    fadeOutDone = false;
+    rainFadeHappening = true;
+    rainFadeOutDone = false;
   }
   // If the current weather is rain and it is not raining
   else if (!isRaining && !currentWeatherType.includes("no-rain") && !currentWeatherType.includes("clear")) {
     // set the current rain sound as a random number between the indices at which the sounds are present in rain sounds
-    if (currentWeatherType.includes("light-rain")) {
-      rainType = "light";
-      startRain(lightRainSounds);
-    } else if (currentWeatherType.includes("med-rain")) {
-      rainType = "med";
-      startRain(medRainSounds);
-    } else if (currentWeatherType.includes("heavy-rain")) {
-      rainType = "heavy";
-      startRain(heavyRainSounds);
-    } else {
+    currentRainType = setRainTypeByWeatherType(currentWeatherType);
+    if (currentRainType == undefined) {
       mx.message("Error: Weather type Unrecognized");
       isRaining = true;
       return;
     }
+    
+    startRainSounds(currentRainType.sounds, seconds);
 
     prevRainType = undefined;
-    prevRainIndex = undefined;
+    prevRainSoundIndex = undefined;
   
     // set the rain fade in type, get the volume we're fading into
-    fadeInRainType = rainType;
-    currentFadeInVolume = 0;
-    getFadeVolumes("in");
-    fadeInVolPerSec = (targetFadeInVolume - currentFadeInVolume) / FADE_IN_TIME;
+    rainCurrentFadeInVolume = 0;
+    rainTargetFadeInVolume = currentRainType.vol;
+    rainFadeInVolPerSec = (rainTargetFadeInVolume - rainCurrentFadeInVolume) / rainFadeInTime;
 
     isRaining = true;
 
     // If we are currently already in a fade cancel it and return
-    if (fadeHappening) {
+    if (rainFadeHappening) {
       cancelFade();
       return;
     }
     
     // get time we're starting the fade
-    timeFadeStarted = mx.seconds;
+    timeRainFadeStarted = seconds;
     // say that we're fading, and that the fade in is not done
-    fadeHappening = true;
-    fadeInDone = false;
+    rainFadeHappening = true;
+    rainFadeInDone = false;
   }
 
   if (isRaining) {
     // if we changed rain types
-    if (currentWeatherType.includes("light-rain") && rainType !== "light") {
-      changeRainType("light");
-    } else if (currentWeatherType.includes("med-rain") && rainType !== "med") {
-      changeRainType("med");
-    } else if (currentWeatherType.includes("heavy-rain") && rainType !== "heavy") {
-      changeRainType("heavy");
+    var newRainIndex = checkForRainChange(currentWeatherType, currentRainType);
+    if (newRainIndex !== -1) {
+      changeRainType(rainTypes[newRainIndex], seconds);
     }
 
     // if it's raining we update the current rain sound position
-    moveRainPosition(rainType, currentRainSoundIndex);
+    moveRainPosition(currentRainType, currentRainSoundIndex);
+    
     // If there's not a fade happening we will need to move the rain billboards, if there is
     // we handle the moving in the fading section
-    if (!fadeHappening) {
-      rainType == "light" ? moveRainBillboards(lightRain, 1) : rainType == "med" ? moveRainBillboards(mediumRain, 1) : moveRainBillboards(heavyRain, 1);
+    if (!rainFadeHappening) {
+      moveRainBillboards(currentRainType, 1);
     }
   }
 
-  if (fadeHappening) {
+  if (rainFadeHappening) {
     // store time since fade started
-    var t = mx.seconds - timeFadeStarted;
+    var t = seconds - timeRainFadeStarted;
     // If we go back in a demo between a fade we must reset
     if (t < 0) {
       cancelFade();
       return;
     }
-    if (!fadeInDone) {
+    if (!rainFadeInDone) {
       // Calculate the current volume and set it
-      currentFadeInVolume = (fadeInVolPerSec * t);
-      setRainSoundVolume(rainType, currentRainSoundIndex, currentFadeInVolume);
+      // if the weather type index is -1 it's the start of the session so just instantly set volume and opacity
+      rainCurrentFadeInVolume = (weatherTypeIndex != -1) ? (rainFadeInVolPerSec * t) : rainTargetFadeInVolume;
+
+      setRainSoundVolume(currentRainType, currentRainSoundIndex, rainCurrentFadeInVolume);
 
       // Fade in rain animation
-      var currentOpacity = (1 / FADE_IN_TIME * t);
+      var currentOpacity = (weatherTypeIndex != -1) ? (1 / rainFadeInTime * t) : 1;
+
       if (currentOpacity >= 0 && currentOpacity <= 1) {
-        rainType == "light" ? moveRainBillboards(lightRain, currentOpacity) : rainType == "med" ? moveRainBillboards(mediumRain, currentOpacity) : moveRainBillboards(heavyRain, currentOpacity);
+        moveRainBillboards(currentRainType, currentOpacity);
       }
       
-
       // If our current volume is greater than or equal to the target volume and we've reached opacity
-      if (currentFadeInVolume >= targetFadeInVolume && currentOpacity >= 1) {
+      if (rainCurrentFadeInVolume >= rainTargetFadeInVolume && currentOpacity >= 1) {
         // set the sound to the target volume just in case for demos
-        setRainSoundVolume(rainType, currentRainSoundIndex, targetFadeInVolume);
+        setRainSoundVolume(currentRainType, currentRainSoundIndex, rainTargetFadeInVolume);
 
         // We're done with these variables, leave them undefined
-        fadeInSoundArr = undefined;
-        currentFadeInVolume = undefined;
-        targetFadeInVolume = undefined;
-        fadeInRainType = undefined;
-        fadeInVolPerSec = undefined;
+        rainCurrentFadeInVolume = undefined;
+        rainTargetFadeInVolume = undefined;
+        rainFadeInVolPerSec = undefined;
 
         // We're done fading in
-        fadeInDone = true;
+        rainFadeInDone = true;
       }
     }
-    if (!fadeOutDone) {
+    if (!rainFadeOutDone) {
       // If we have a fade out rain we still need to move it's position
-      moveRainPosition(prevRainType, prevRainIndex);
+      moveRainPosition(prevRainType, prevRainSoundIndex);
 
       // Calculate the current volume and set it
-      currentFadeOutVolume = startFadeOutVolume + (fadeOutVolPerSec * t);
-      setRainSoundVolume(prevRainType, prevRainIndex, currentFadeOutVolume);
+      rainCurrentFadeOutVolume = rainStartFadeOutVolume + (rainFadeOutVolPerSec * t);
+      setRainSoundVolume(prevRainType, prevRainSoundIndex, rainCurrentFadeOutVolume);
 
       // Fade out rain animation
-      var currentOpacity = 1 - (1 / FADE_IN_TIME * t);
+      var currentOpacity = 1 - (1 / rainFadeOutTime * t);
       if (currentOpacity >= 0 && currentOpacity <= 1) {
-        prevRainType == "light" ? moveRainBillboards(lightRain, currentOpacity) : prevRainType == "med" ? moveRainBillboards(mediumRain, currentOpacity) : moveRainBillboards(heavyRain, currentOpacity);
+        moveRainBillboards(prevRainType, currentOpacity);
       }
       
       // If we've reached less than or equal to zero
-      if (currentFadeOutVolume <= 0 && currentOpacity <= 0) {
+      if (rainCurrentFadeOutVolume <= 0 && currentOpacity <= 0) {
         // set the sound to the target volume just in case for demos
-        setRainSoundVolume(prevRainType, prevRainIndex, 0);
+        setRainSoundVolume(prevRainType, prevRainSoundIndex, 0);
 
         // Stop the sound
-        stopRainSound(prevRainType, prevRainIndex);
+        stopRainSound(prevRainType, prevRainSoundIndex);
 
         // We're done with these variables for now, leave them undefined
-        fadeInSoundArr = undefined;
-        fadeOutRainType = undefined;
-        currentFadeOutVolume = undefined;
-        startFadeOutVolume = undefined;
-        fadeOutVolPerSec = undefined;
+        rainCurrentFadeOutVolume = undefined;
+        rainStartFadeOutVolume = undefined;
+        rainFadeOutVolPerSec = undefined;
 
         // We're done fading out
-        fadeOutDone = true;
+        rainFadeOutDone = true;
       }
     }
-    if (fadeInDone && fadeOutDone) fadeHappening = false;
+    if (rainFadeInDone && rainFadeOutDone) rainFadeHappening = false;
   }
 }
 
 function cancelFade() {
-  fadeHappening = false;
-  fadeInDone = true;
-  fadeOutDone = true;
-  if (rainType != undefined) {
-    var vol = rainType == "light" ? lightRain.vol : rainType == "med" ? mediumRain.vol : heavyRain.vol;
-    setRainSoundVolume(rainType, currentRainSoundIndex, vol);
-    rainType == "light" ? moveRainBillboards(lightRain, 1) : rainType == "med" ? moveRainBillboards(mediumRain, 1) : moveRainBillboards(heavyRain, 1);
+  rainFadeHappening = false;
+  rainFadeInDone = true;
+  rainFadeOutDone = true;
+  if (currentRainType != undefined) {
+    var vol = currentRainType.vol;
+    setRainSoundVolume(currentRainType, currentRainSoundIndex, vol);
+    moveRainBillboards(currentRainType, 1);
   }
 
   // Hide all the billboards and mute all rain sounds except the current rain just in case we're catching up on multiple weather cycles
-  muteAllRainSounds(rainType);
-  hideAllRainBillboards(rainType);
+  muteAllRainSounds(currentRainType);
+  hideAllRainBillboards(currentRainType);
 }
 
-function changeRainType(newRainType) {
+function changeRainType(newRainType, seconds) {
 
-  // get the fade out volume
-  getFadeVolumes("out");
+  // set the fade out volume before resetting the current rain type
+  rainStartFadeOutVolume = currentRainType.vol;
 
   // set the previous rain type, and the previous rain sound index
-  prevRainType = rainType;
-  prevRainIndex = currentRainSoundIndex;
-
-  // fade in rain type is the new rain type, fade out is previous rain type
-  fadeInRainType = newRainType;
-  fadeOutRainType = prevRainType;
+  prevRainType = currentRainType;
+  prevRainSoundIndex = currentRainSoundIndex;
 
   // reset rain type
-  rainType = newRainType;
+  currentRainType = newRainType;
 
   // If we are currently already in a fade cancel it
-  if (fadeHappening) {
+  if (rainFadeHappening) {
     cancelFade();
   }
   
   // start a new rain sound for preparation of fading in
-  if (rainType === "light") {
-    startRain(lightRainSounds);
-  } else if (rainType === "med") {
-    startRain(medRainSounds);
-  } else if (rainType === "heavy") {
-    startRain(heavyRainSounds);
-  }
+  startRainSounds(currentRainType.sounds, seconds);
 
-  // get the fade in volume
-  getFadeVolumes("in");
+  // set the fade in volume
+  rainTargetFadeInVolume = currentRainType.vol;
 
   // initialize current fade volume and vol/sec variables
-  currentFadeInVolume = 0;
-  fadeInVolPerSec = targetFadeInVolume / FADE_IN_TIME;
-  fadeOutVolPerSec = (0 - startFadeOutVolume) / FADE_OUT_TIME;
+  rainCurrentFadeInVolume = 0;
+  rainFadeInVolPerSec = rainTargetFadeInVolume / rainFadeInTime;
+  rainFadeOutVolPerSec = (0 - rainStartFadeOutVolume) / rainFadeOutTime;
 
   // get time fade starting
-  timeFadeStarted = mx.seconds;
+  timeRainFadeStarted = seconds;
 
-  fadeHappening = true;
-  fadeInDone = false;
-  fadeOutDone = false;
+  rainFadeHappening = true;
+  rainFadeInDone = false;
+  rainFadeOutDone = false;
 }
 
-function startRain(sound_arr) {
-  var rand = mulberry32SeedFromInterval(mx.seconds * 100, 0, sound_arr.length - 1);
+function startRainSounds(soundsArr, seconds) {
+  var rand = mulberry32SeedFromInterval(seconds * 100, 0, soundsArr.length - 1);
   currentRainSoundIndex = Math.floor(rand());
 
   // initialize sound volume to zero and start it for the fade
-  mx.set_sound_vol(sound_arr[currentRainSoundIndex], 0);
-  mx.start_sound(sound_arr[currentRainSoundIndex]);
+  mx.set_sound_vol(soundsArr[currentRainSoundIndex], 0);
+  mx.start_sound(soundsArr[currentRainSoundIndex]);
 }
 
-function getFadeVolumes(key) {
-  if (key === "in") {
-    if (rainType === "light") {
-      targetFadeInVolume = lightRain.vol;
-    } else if (rainType === "med") {
-      targetFadeInVolume = mediumRain.vol;
-    } else if (rainType === "heavy") {
-      targetFadeInVolume = heavyRain.vol;
-    }
-  }
-  else if (key === "out")  {
-    if (rainType === "light") {
-      startFadeOutVolume = lightRain.vol;
-    } else if (rainType === "med") {
-      startFadeOutVolume = mediumRain.vol;
-    } else if (rainType === "heavy") {
-      startFadeOutVolume = heavyRain.vol;
-    }
-  }
-  else mx.message("Error: key unrecognized");
-}
-
-function setRainSoundVolume(type, index, vol) {
-  if (type === "light") {
-    mx.set_sound_vol(lightRainSounds[index], vol);
-  } else if (type === "med") {
-    mx.set_sound_vol(medRainSounds[index], vol);
-  } else if (type === "heavy") {
-    mx.set_sound_vol(heavyRainSounds[index], vol);
-  } 
+function setRainSoundVolume(rainType, index, vol) {
+  mx.set_sound_vol(rainType.sounds[index], vol);
 }
 
 function muteAllRainSounds(rainType) {
-  if (rainType != "light") lightRainSounds.forEach(muteIndex);
-  if (rainType != "med") medRainSounds.forEach(muteIndex);
-  if (rainType != "heavy") heavyRainSounds.forEach(muteIndex);
-}
-
-function muteIndex(index) {
-  mx.set_sound_vol(index, 0);
-}
-
-function hideAllRainBillboards(rainType) {
-  if (rainType != "light") hideRainBillboards(lightRain);
-  if (rainType != "med") hideRainBillboards(mediumRain);
-  if (rainType != "heavy") hideRainBillboards(heavyRain);
-}
-
-function stopRainSound(type, index) {
-  if (type === "light") {
-    mx.stop_sound(lightRainSounds[index]);
-  } else if (type === "med") {
-    mx.stop_sound(medRainSounds[index]);
-  } else if (type === "heavy") {
-    mx.stop_sound(heavyRainSounds[index]);
+  for (var i = 0; i < rainTypes.length; i++) {
+    if (rainType === rainTypes[i]) continue;
+    // mute all rain sounds except for the current rain type
+    rainTypes[i].sounds.forEach(function(soundIndex){mx.set_sound_vol(soundIndex, 0)});
   }
 }
 
+function hideAllRainBillboards(rainType) {
+  for (var i = 0; i < rainTypes.length; i++) {
+    if (rainType == rainTypes[i]) continue;
+    // hide all rain billboards except for the current rain type
+    hideRainBillboards(rainTypes[i]);
+  }
+}
+
+function stopRainSound(type, index) {
+  mx.stop_sound(type.sounds[index]);
+}
+
 function moveRainPosition(type, index) {
-  if (type === "light") {
-    mx.set_sound_pos(lightRainSounds[index], pos[0], pos[1], pos[2]);
-  } else if (type === "med") {
-    mx.set_sound_pos(medRainSounds[index], pos[0], pos[1], pos[2]);
-  } else if (type === "heavy") {
-    mx.set_sound_pos(heavyRainSounds[index], pos[0], pos[1], pos[2]);
-  } 
+  mx.set_sound_pos(type.sounds[index], pos[0], pos[1], pos[2]);
 }
 
 const grid = {
@@ -789,18 +1086,22 @@ const grid = {
   get area() {return this.count * this.count;}
 };
 
-var isEnoughBillboards;
-isEnoughBillboards = checkEnoughBillboards(lightRain);
-isEnoughBillboards = checkEnoughBillboards(mediumRain);
-isEnoughBillboards = checkEnoughBillboards(heavyRain);
-
+var isEnoughBillboards = true;
+for (var i = 0; i < rainTypes.length; i++) {
+  if (!checkEnoughBillboards(rainTypes[i])) {
+    isEnoughBillboards = false;
+    break;
+  }
+}
 
 if (isEnoughBillboards) {
   // hide every billboard
   hideAllRainBillboards(undefined);
-  for (var i = 0; i < grid.area; i++) {lightRain.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});}
-  for (var i = 0; i < grid.area; i++) {mediumRain.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});}
-  for (var i = 0; i < grid.area; i++) {heavyRain.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});}
+  for (var i = 0; i < grid.area; i++) {
+    for (j = 0; j < rainTypes.length; j++) {
+      rainTypes[j].billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});
+    }
+  }
 }
 function checkEnoughBillboards(type) {
   if (type.indexStart > -1) {
@@ -823,6 +1124,16 @@ function checkEnoughBillboards(type) {
     }
     return true;
   }
+}
+
+// takes the x and z coordinates and checks to see if the point is within a no-rain spot
+function isBillboardInNoRainSpot(x, z) {
+  for (var i = 0; i < noRainSpots.length; i++) {
+    if (isPointInPolygon([x,z], noRainSpots[i].vertices)) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 const billboardMaxHeight = 80;
@@ -850,21 +1161,43 @@ function moveRainBillboards(type, alphaStart) {
         mx.color_billboard(type.indexStart + index, 1, 1, 1, type.billboardArr[index].alpha);
       }
 
+      var billboardNoRainIndex = isBillboardInNoRainSpot(billboard_x, billboard_z);
+
       var camHeightAboveTerrain = camy - mx.get_elevation(camx, camz);
       var moveY = false;
       
-      if (camHeightAboveTerrain <= (billboardMaxHeight / 2) && type.billboardArr[index].y != 0) {
-        type.billboardArr[index].y = 0;
-        moveY = true;
+      if (camHeightAboveTerrain <= (billboardMaxHeight / 2)) {
+        // move the billboard if it's in a no rain spot to the desired height
+        if (billboardNoRainIndex > -1 && type.billboardArr[index].y != noRainSpots[billboardNoRainIndex].billboardHeight) {
+          type.billboardArr[index].y = noRainSpots[billboardNoRainIndex].billboardHeight;
+          moveY = true;
+        }
+        else if (type.billboardArr[index].y != 0) {
+          type.billboardArr[index].y = 0;
+          moveY = true;
+        }
       }
 
       /* Put the billboard Y level so it's centered in the middle of the billboard,
       so the billboard height is camheight - billboardMaxHeight / 2 */
 
       if (camHeightAboveTerrain > billboardMaxHeight / 2) {
-        type.billboardArr[index].y = camHeightAboveTerrain - (billboardMaxHeight / 2);
-        moveY = true;
+        var newHeight = camHeightAboveTerrain - (billboardMaxHeight / 2);
+        // if the billboard is in a no rain spot
+        if (billboardNoRainIndex > -1) {
+          const noRainHeight = noRainSpots[billboardNoRainIndex].billboardHeight;
+          // if the no rain spot desired height is above the new height set it
+          if (newHeight < noRainHeight && type.billboardArr[index].y != noRainHeight) {
+            type.billboardArr[index].y = noRainHeight;
+            moveY = true;
+          }
+        } else if (type.billboardArr[index].y != newHeight) {
+          type.billboardArr[index].y = newHeight;
+          moveY = true;
+        }
       }
+
+      //mx.message(type.billboardArr[index].x.toString() + "," + type.billboardArr[index].y.toString() + "," + type.billboardArr[index].z.toString());
 
       // If we need to move the grid point
       if (type.billboardArr[index].x != billboard_x || type.billboardArr[index].z != billboard_z || moveY) {
@@ -884,31 +1217,46 @@ function hideRainBillboards(rainobj) {
   }
 }
 
+function getGateDropTime(seconds) {
+  if (seconds < gateDropTime && gateDropped) gateDropped = false;
+  if (gateDropped) return;
+
+  gateDropTime = mx.get_gate_drop_time();
+  if (gateDropTime > 0) {
+    gateDropped = true;
+    fillSmiteList();
+    if (smiteList.length == 0) canSmite = false;
+    var rand = mulberry32SeedFromInterval((gateDropTime * 1000) >> 3, 10, 20);
+    timeToSmite = rand() + gateDropTime;
+  }
+}
+
 function frameHandler(seconds) {
   globalRunningOrder = mx.get_running_order();
+
+  getGateDropTime(seconds);
   updateCamPosition();
   try {
-    doThunderAndLightning();
+    doThunderAndLightning(seconds);
   }
   catch (e) {
     mx.message("lightning error: " + e.toString());
   }
   try {
-    doRain();
+    doRain(seconds);
   }
   catch (e) {
     mx.message("rain error: " + e.toString());
   }
-  
+
   frameHandlerPrev(seconds);
 }
 
 var frameHandlerPrev = mx.frame_handler;
 mx.frame_handler = frameHandler;
 
-function randomIntFromInterval(min, max) {return Math.floor(Math.random() * (max - min + 1) + min);}
-function randomNumFromInterval(min,max) {return Math.random() * (max - min) + min;}
 function getDistance3D(x1,y1,z1,x2,y2,z2) {return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2) + Math.pow(z2 - z1, 2));}
+
 function mulberry32SeedFromInterval(a, min, max) {
   return function() {
     var t = a += 0x6D2B79F5;
@@ -946,13 +1294,13 @@ function breakTime(t) {
 function leftFillString(s, pad, n) {
    n -= s.length;
 
-   while (n > 0) {
-       if (n & 1)
-       s = pad + s;
-
-       n >>= 1;
-       pad += pad;
-   }
+  while (n > 0) {
+    if (n & 1)
+      s = pad + s;
+    
+    n >>= 1;
+    pad += pad;
+  }
 
   return s;
 }
