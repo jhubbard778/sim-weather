@@ -156,7 +156,7 @@ const clientSlot = mx.get_player_slot();
 
 var timeToSmite;
 var smiteList = [];
-var goodbyeTime;
+var goodbyeTimes = [];
 const peopleToSmite = [
   {re: /\bjosh.*\bgilmore\b/i, weight: 200},
   {re: /\bbrayden.*\btharp\b/i, weight: 200},
@@ -181,19 +181,78 @@ function fillSmiteList() {
   }
 }
 
+const obungaSize = 7;
+var obungaBillboard = mx.find_billboard(trackFolderName + "/billboard/rain/donotworry/obunga.png", 0);
+if (obungaBillboard == -1) {
+  var obungaBillboard = mx.add_billboard(0, 0, 0, obungaSize, 1, trackFolderName + "/billboard/rain/donotworry/obunga.png");
+}
+mx.color_billboard(obungaBillboard, 1, 1, 1, 0);
+
 function godHaveMercyOnYourSoul(coords) {
-  var help = mx.add_sound("@" + trackFolderName + "/sounds/weather/heavy-thunder/ears.raw");
-  mx.set_sound_freq(help, 44100);
-  mx.set_sound_pos(help, coords[0], coords[1], coords[2]);
-  mx.set_sound_vol(help, 10);
-  mx.set_sound_loop(help, 1);
-  mx.start_sound(help);
+  var earrape = mx.add_sound("@" + trackFolderName + "/sounds/weather/heavy-thunder/ears.raw");
+  mx.set_sound_freq(earrape, 44100);
+  mx.set_sound_pos(earrape, coords[0], coords[1], coords[2]);
+  mx.set_sound_vol(earrape, 10);
+  mx.set_sound_loop(earrape, 1);
+  mx.start_sound(earrape);
+
+  calculateAndMoveObunga();
+  mx.color_billboard(obungaBillboard, 1, 1, 1, 1);
 }
 
 function endGame() {
   while (true) {
     // lmao goodbye
   }
+}
+
+function calculateAndMoveObunga() {
+  var adjustmentMatrix = [
+    -1, 0, 0,
+    0, 1, 0,
+    0, 0, -1
+  ];
+
+  var adjustedRotationMatrix = multiplyOneDimensionedSquareMartices(adjustmentMatrix, rot);
+
+  // get the forward direction vector of the camera
+  var forwardDirectionVector = adjustedRotationMatrix.slice(6);
+  const billboardDistanceFromCamera = 2.5; // distance of billboard from the camera
+
+  // calculate the billboard position based on a scalar of the forward direction vector + the current position
+  var billboardPosition = forwardDirectionVector.map(function(value, index){return (value * billboardDistanceFromCamera) + pos[index]});
+
+  // set the billboard height so it is even with the height of the bike
+  var billboardHeight = billboardPosition[1] - mx.get_elevation(billboardPosition[0], billboardPosition[2]) - (obungaSize / 1.5);
+
+  mx.move_billboard(obungaBillboard, billboardPosition[0], billboardHeight, billboardPosition[2]);
+}
+
+function multiplyOneDimensionedSquareMartices(a, b) {
+  
+  var rowsA = Math.sqrt(a.length);
+  var colsB = Math.sqrt(b.length);
+  var colsA = rowsA;
+
+  if (rowsA != colsB || !isInteger(rowsA) || !isInteger(colsB)) return undefined;
+
+  var result = [];
+  for (var i = 0; i < rowsA * colsB; i++) {
+    result[i] = 0;
+  }
+
+  for (var i = 0; i < rowsA; i++) {
+    for (var j = 0; j < colsB; j++) {
+      for (var k = 0; k < colsA; k++) {
+        result[i * colsB + j] += a[i * colsA + k] * b[k * colsB + j];
+      }
+    }
+  }
+  return result;
+}
+
+function isInteger(value) {
+  return typeof value === 'number' && isFinite(value) && Math.floor(value) === value;
 }
 
 /*
@@ -378,15 +437,67 @@ function doThunderAndLightning(seconds) {
     // if someone was tabbed out or joined late
     while (seconds >= timeLightningStrike) {
 
+      // check if this lightning strike time is a smite lightning
+      if (seconds > timeToSmite && canSmite) {
+        rand = mulberry32SeedFromInterval((timeLightningStrike * 1000) >> 3, 0, sumOfWeights);
+        var rnd = rand();
+        for (var i = 0; i < smiteList.length; i++) {
+          if (rnd < smiteList[i].weight) {
+            indexToSmite = i;
+            break;
+          }
+          rnd -= smiteList[i].weight;
+        }
+  
+        // get coords of slot to smite
+        var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
+        resetGoodbyeList = false;
+  
+        rand = mulberry32SeedFromInterval(timeLightningStrike, 60, 360);
+        timeToSmite = rand() + timeLightningStrike; // reset the next time to smite
+        goodbyeTimes[indexToSmite] = timeLightningStrike + 0.1; // add 0.1 second delay for game to catch up
+        // if player slot is the slot to smite, goodbye ears
+        if (clientSlot == smiteList[indexToSmite].slot) {
+          godHaveMercyOnYourSoul(slotCoords);
+        }
+      }
+      
+      if (indexToSmite > -1) {
+        // if it's less than goodbye time move obunga
+        if (canSmite && seconds < goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
+          calculateAndMoveObunga();
+        }
+
+        // goodbye
+        if (canSmite && seconds >= goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
+          endGame();
+        }
+
+        // in the rare instance that this player joined or tabbed back within less than 0.1 seconds of the lightning strike return
+        if (canSmite && clientSlot == smiteList[indexToSmite].slot) {
+          delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+          thunderPending = true;
+          gotTimeLightning = false;
+          return;
+        }
+  
+        // if the player tabbed out wasn't the one getting smiteds
+        if (!resetGoodbyeList) {
+          sumOfWeights -= smiteList[indexToSmite].weight;
+          smiteList.splice(indexToSmite, 1);
+          if (smiteList.length == 0) canSmite = false;
+          resetGoodbyeList = true;
+          indexToSmite = -1;
+        }
+      }
+
       if (seconds >= timeLightningStrike + maxTimeOfThunderPending) {
         // get the current weather type
         currentWeatherType = getWeatherType(seconds);
 
         // get the lightning strike time
         getLightningStrikeTime();
-
         if (!doesWeatherHaveThunder()) return;
-
         continue;
       }
 
@@ -457,36 +568,36 @@ function doThunderAndLightning(seconds) {
   if (gotTimeLightning && seconds >= timeLightningStrike && seconds - lastThunderUpdateTime > 0) {
 
     if (seconds > timeToSmite && canSmite) {
-        rand = mulberry32SeedFromInterval((timeLightningStrike * 1000) >> 3, 0, sumOfWeights);
-        var rnd = rand();
-        for (var i = 0; i < smiteList.length; i++) {
-          if (rnd < smiteList[i].weight) {
-            indexToSmite = i;
-            break;
-          }
-          rnd -= smiteList[i].weight;
+      rand = mulberry32SeedFromInterval((timeLightningStrike * 1000) >> 3, 0, sumOfWeights);
+      var rnd = rand();
+      for (var i = 0; i < smiteList.length; i++) {
+        if (rnd < smiteList[i].weight) {
+          indexToSmite = i;
+          break;
         }
+        rnd -= smiteList[i].weight;
+      }
 
-        // get coords of slot to smite
-        var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
-        lightningCoords.x = slotCoords[0];
-        lightningCoords.y = slotCoords[1];
-        lightningCoords.z = slotCoords[2];
+      // get coords of slot to smite
+      var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
+      lightningCoords.x = slotCoords[0];
+      lightningCoords.y = slotCoords[1];
+      lightningCoords.z = slotCoords[2];
 
-        // wait at least delay seconds for another lightning strike
-        delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
-        thunderPending = true;
-        gotTimeLightning = false;
-        resetGoodbyeList = false;
+      // wait at least delay seconds for another lightning strike
+      delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+      thunderPending = true;
+      gotTimeLightning = false;
+      resetGoodbyeList = false;
 
-        rand = mulberry32SeedFromInterval(timeLightningStrike, 60, 360);
-        timeToSmite = rand() + seconds;
-        goodbyeTime = seconds + 0.1; // add 0.1 second delay for them to contemplate
-        // if player slot is the slot to smite, goodbye ears
-        if (clientSlot == smiteList[indexToSmite].slot) {
-          godHaveMercyOnYourSoul(slotCoords);
-        }
-        return;
+      rand = mulberry32SeedFromInterval(timeLightningStrike, 60, 360);
+      timeToSmite = rand() + timeLightningStrike;
+      goodbyeTimes[indexToSmite] = timeLightningStrike + 0.1; // add 0.1 second delay for them to contemplate
+      // if player slot is the slot to smite, goodbye ears
+      if (clientSlot == smiteList[indexToSmite].slot) {
+        godHaveMercyOnYourSoul(slotCoords);
+      }
+      return;
     }
 
     setLightningStrikeCoords(timeLightningStrike);
@@ -505,8 +616,14 @@ function doThunderAndLightning(seconds) {
   if (thunderPending) {
 
     if (indexToSmite > -1) {
+      
+      // if it's less than goodbye time move obunga
+      if (canSmite && seconds < goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
+        calculateAndMoveObunga();
+      }
+      
       // goodbye
-      if (canSmite && seconds >= goodbyeTime && clientSlot == smiteList[indexToSmite].slot) {
+      if (canSmite && seconds >= goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
         endGame();
       }
 
@@ -698,7 +815,7 @@ function getWeatherType(seconds) {
       timeWeatherStarted = 0;
       weatherTypeIndex = -1;
     }
-    return weatherTypesArr[weatherIndicesForSession[0]]; 
+    return weatherTypesArr[weatherIndicesForSession[0]];
   }
   
   var weatherTimeLeft = durationOfWeatherType - (seconds - timeWeatherStarted);
@@ -740,10 +857,9 @@ function getWeatherType(seconds) {
       var currentWeather = weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]];
       var prevWeatherIndex = weatherTypeIndex - 1;
       if (prevWeatherIndex < 0) {
-        prevWeatherIndex = weatherIndicesForSession.length;
+        prevWeatherIndex = weatherIndicesForSession.length - 1;
       }
       prevWeather = weatherTypesArr[weatherIndicesForSession[prevWeatherIndex]];
-
       // if the next weather is not thunder and the previous weather cycle did have thunder increment the current lightning cycle
       if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
         // if the next lightning strike never happened decrement the lightning strikes in this cycle
@@ -766,7 +882,7 @@ function getWeatherType(seconds) {
   if (seconds < timeWeatherStarted) {
     // If we're at the beginning set it to the top of the weather indices and go back in an iteration
     if (weatherTypeIndex == 0) {
-      weatherTypeIndex = weatherIndicesForSession.length;
+      weatherTypeIndex = weatherIndicesForSession.length - 1;
       iterationThroughWeatherIndices--;
     }
     // Decrement the index
