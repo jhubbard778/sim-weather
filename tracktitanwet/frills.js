@@ -17,7 +17,7 @@ const terrain = {
 */
 const noRainSpots = [
   { // Test
-    vertices: [[0,0],[245,150],[0,250]],
+    vertices: [[0,0],[290,0],[197,195],[0,250]],
     billboardHeight: 100
   },
 ];
@@ -422,7 +422,6 @@ function updateCamPosition() {
   mx.get_camera_location(pos, rot);
 }
 
-
 var gotTimeLightning = false;
 var timeLightningStrike;
 var currentWeatherType;
@@ -464,6 +463,8 @@ const maxTimeOfThunderPending = (maxCoords * Math.sqrt(2)) / SPEED_OF_SOUND;
 var lastThunderUpdateTime = 0;
 
 function doThunderAndLightning(seconds) {
+
+  if (currentWeatherType === undefined) return;
 
   // if seconds is greater we'll assume that the player tabbed out and grab a lightning strike first before switching weather
   if (seconds < lastThunderUpdateTime + 1.25) {
@@ -1229,6 +1230,8 @@ var rainFadeInDone = true;
 var rainFadeOutDone = true;
 
 function doRain(seconds) {
+  if (currentWeatherType === undefined) return;
+
   // If the current weather is no rain or clear and it's raining
   if ((currentWeatherType.includes("no-rain") || currentWeatherType.includes("clear")) && isRaining) {
 
@@ -1526,7 +1529,7 @@ function isBillboardInNoRainSpot(x, z) {
   return -1;
 }
 
-const billboardMaxHeight = 80;
+const rainBillboardMaxHeight = 80;
 
 function moveRainBillboards(type, alphaStart) {
   if (!isEnoughBillboards) return;
@@ -1556,38 +1559,46 @@ function moveRainBillboards(type, alphaStart) {
       var camHeightAboveTerrain = camy - mx.get_elevation(camx, camz);
       var moveY = false;
       
-      if (camHeightAboveTerrain <= (billboardMaxHeight / 2)) {
+      if (camHeightAboveTerrain <= (rainBillboardMaxHeight / 2)) {
         // move the billboard if it's in a no rain spot to the desired height
-        if (billboardNoRainIndex > -1 && type.billboardArr[index].y != noRainSpots[billboardNoRainIndex].billboardHeight) {
+        if (billboardNoRainIndex > -1 && type.billboardArr[index].y !== noRainSpots[billboardNoRainIndex].billboardHeight) {
           type.billboardArr[index].y = noRainSpots[billboardNoRainIndex].billboardHeight;
+          //mx.message(colors.yellow + "NO RAIN BILLBOARD: ["+type.billboardArr[index].x.toString() + ", " + type.billboardArr[index].y.toString() + ", " + type.billboardArr[index].z.toString()+"]" + colors.normal);
           moveY = true;
         }
-        else if (type.billboardArr[index].y != 0) {
+        // otherwise if it's not in a no rain spot and the y level isn't zero set to zero
+        else if (billboardNoRainIndex === -1 && type.billboardArr[index].y !== 0) {
           type.billboardArr[index].y = 0;
           moveY = true;
         }
       }
 
       /* Put the billboard Y level so it's centered in the middle of the billboard,
-      so the billboard height is camheight - billboardMaxHeight / 2 */
+      so the billboard height is camheight - rainBillboardMaxHeight / 2 */
 
-      if (camHeightAboveTerrain > billboardMaxHeight / 2) {
-        var newHeight = camHeightAboveTerrain - (billboardMaxHeight / 2);
+      if (camHeightAboveTerrain > rainBillboardMaxHeight / 2) {
+        var newHeight = camHeightAboveTerrain - (rainBillboardMaxHeight / 2);
+        
         // if the billboard is in a no rain spot
         if (billboardNoRainIndex > -1) {
           const noRainHeight = noRainSpots[billboardNoRainIndex].billboardHeight;
           // if the no rain spot desired height is above the new height set it
-          if (newHeight < noRainHeight && type.billboardArr[index].y != noRainHeight) {
+          if (newHeight < noRainHeight && type.billboardArr[index].y !== noRainHeight) {
             type.billboardArr[index].y = noRainHeight;
             moveY = true;
+          } 
+          // otherwise if the new height is greater than the no rain height set the billboard to the new height
+          else if (newHeight > noRainHeight && type.billboardArr[index].y !== newHeight) {
+            type.billboardArr[index].y = newHeight;
+            moveY = true;
           }
-        } else if (type.billboardArr[index].y != newHeight) {
+        }
+        // if the billboard is not in a no rain spot and the y value of the billboard isn't the new height set it
+        else if (type.billboardArr[index].y !== newHeight) {
           type.billboardArr[index].y = newHeight;
           moveY = true;
         }
       }
-
-      //mx.message(type.billboardArr[index].x.toString() + "," + type.billboardArr[index].y.toString() + "," + type.billboardArr[index].z.toString());
 
       // If we need to move the grid point
       if (type.billboardArr[index].x != billboard_x || type.billboardArr[index].z != billboard_z || moveY) {
@@ -1596,7 +1607,6 @@ function moveRainBillboards(type, alphaStart) {
         mx.move_billboard(type.indexStart + index, type.billboardArr[index].x, type.billboardArr[index].y, type.billboardArr[index].z);
       }
       
-      moveY = false;
   	}
   }
 }
@@ -1620,15 +1630,14 @@ function getGateDropTime(seconds) {
     timeToSmite = rand() + gateDropTime;
   }
 }
-var initializedFirstWeatherType = false;
+
 function frameHandler(seconds) {
   globalRunningOrder = mx.get_running_order();
 
   getGateDropTime(seconds);
   updateCamPosition();
-  if (!initializedFirstWeatherType) {
+  if (currentWeatherType === undefined) {
     currentWeatherType = getWeatherType(seconds);
-    initializedFirstWeatherType = true;
   }
   try {
     doThunderAndLightning(seconds);
