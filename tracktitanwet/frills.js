@@ -395,20 +395,29 @@ const lightningTextures = {
 
 
 function setRainTypeByWeatherType(weatherType) {
-  for (var i = 0; i < rainTypes.length; i++) {
-    if (weatherType.includes(rainTypes[i].rainName)) {
-      return rainTypes[i];
+  try {
+    for (var i = 0; i < rainTypes.length; i++) {
+      if (weatherType.includes(rainTypes[i].rainName)) {
+        return rainTypes[i];
+      }
     }
+  } catch (e) {
+    mx.message(colors.yellow + "Exception Here 3: " + e.toString() + colors.normal);
   }
+  
   return undefined;
 }
 
 function checkForRainChange(weatherType, rainType) {
-  for (var i = 0; i < rainTypes.length; i++) {
-    // if the weather type includes the rain name and the rain type passed in does not match the rain type return the index
-    if (weatherType.includes(rainTypes[i].rainName) && rainType.rainName !== rainTypes[i].rainName) {
-      return i;
+  try {
+    for (var i = 0; i < rainTypes.length; i++) {
+      // if the weather type includes the rain name and the rain type passed in does not match the rain type return the index
+      if (weatherType.includes(rainTypes[i].rainName) && rainType.rainName !== rainTypes[i].rainName) {
+        return i;
+      }
     }
+  } catch (e) {
+    mx.message(colors.blue + "Exception Here 4: " + e.toString() + colors.normal);
   }
   return -1;
 }
@@ -467,10 +476,15 @@ function doThunderAndLightning(seconds) {
   if (currentWeatherType === undefined) return;
 
   // if seconds is greater we'll assume that the player tabbed out and grab a lightning strike first before switching weather
-  if (seconds < lastThunderUpdateTime + 1.25) {
+  if (seconds < lastThunderUpdateTime + 1.25 || weatherTypeIndex === -1) {
+    // if the weathertypeindex is -1 we will still grab it anyways to check if we can switch it to zero
     currentWeatherType = getWeatherType(seconds);
+    
+    // if we passed into the first weather type and it doesnt include thunder update the last thunder update time
     if (!doesWeatherHaveThunder(currentWeatherType, seconds)) {
-      lastThunderUpdateTime = seconds;
+      if (weatherTypeIndex > -1) {
+        lastThunderUpdateTime = seconds;
+      }
       return;
     }
   }
@@ -485,7 +499,6 @@ function doThunderAndLightning(seconds) {
   if (!gotTimeLightning && seconds >= delayForAnotherLightning && gateDropped) {
   
     getLightningStrikeTime();
-
     if (seconds >= lastThunderUpdateTime + 1.25) {
       catchUpLightningStrikes(seconds);
     }
@@ -731,7 +744,7 @@ function checkAvailableSmiteTabOut(seconds) {
 function catchUpLightningStrikes(seconds) {
   /*mx.message("");
   mx.message("");
-  mx.message("Client Tabbed out");*/ 
+  mx.message("Client Tabbed out");*/
 
   // check current weather index without changing
   var weatherIndex = getWeatherType(seconds, true, false);
@@ -764,7 +777,7 @@ function catchUpLightningStrikes(seconds) {
     }
 
     //checkAvailableSmiteTabOut(seconds);
-
+    
     currentWeatherType = getWeatherType(timeLightningStrike);
     
     var nextLightningStrikeWeatherIndex = getWeatherType(timeLightningStrike + maxTimeOfThunderPending, true, false);
@@ -782,6 +795,8 @@ function catchUpLightningStrikes(seconds) {
       
       // if the next lightning strike we switch weather types then break out of this loop
       if (!doesWeatherHaveThunder(nextLightningStrikeWeather, timeLightningStrike + maxTimeOfThunderPending, false)) {
+        mx.message(colors.red + "BREAK" + colors.normal);
+        mx.message("");
         break;
       }
       
@@ -830,9 +845,12 @@ function catchUpLightningStrikes(seconds) {
         }
 
         //checkAvailableSmiteTabOut(seconds);
-
+        
         // get the weather type at the current lightning strike
         currentWeatherType = getWeatherType(timeLightningStrike);
+        if (currentWeatherType === undefined) {
+          mx.message(colors.red + timeToString(timeLightningStrike) + colors.normal);
+        }
 
         var nextLightningStrikeWeatherIndex = getWeatherType(timeLightningStrike + maxTimeOfThunderPending, true, false);
         var nextLightningStrikeWeather = convertIndexToWeatherType(nextLightningStrikeWeatherIndex);
@@ -921,24 +939,34 @@ function doesWeatherHaveThunder(weatherType, seconds, removeLightningStrike) {
     removeLightningStrike = true;
   }
 
-  if (!weatherType.includes("thunder") && !thunderPending) {
-    // if the weather type is a mismatch then return
-    if (removeLightningStrike === true && timeLightningStrike !== undefined && (!seconds || (seconds < timeLightningStrike))) {
-      timeLightningStrike = undefined;
-      allLightningStrikeTimes.pop();
-      allTimesGotLightningStrikes.pop();
-      gotTimeLightning = false;
+  try {
+    if (!weatherType.includes("thunder") && !thunderPending) {
+      // if the weather type is a mismatch then return
+      if (removeLightningStrike === true && timeLightningStrike !== undefined && (!seconds || (seconds < timeLightningStrike))) {
+        timeLightningStrike = undefined;
+        allLightningStrikeTimes.pop();
+        allTimesGotLightningStrikes.pop();
+        gotTimeLightning = false;
+      }
+  
+      return false;
     }
-
-    return false;
+  } catch (e) {
+    mx.message(colors.magenta + "Exception Here 5: " + e.toString() + colors.normal);
   }
+  
   return true;
 }
 
 function getLightningStrikeIntervals(weatherType) {
-  for (var i = 0; i < thunderTypes.length; i++) {
-    if (weatherType.includes(thunderTypes[i].name)) return thunderTypes[i].interval;
+  try {
+    for (var i = 0; i < thunderTypes.length; i++) {
+      if (weatherType.includes(thunderTypes[i].name)) return thunderTypes[i].interval;
+    }
+  } catch (e) {
+    mx.message(colors.cyan + "Exception Here 6: " + e.toString() + colors.normal);
   }
+
   return undefined;
 }
 
@@ -1000,39 +1028,15 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
   }
   
   if (!initializedWeatherForSession) {
+    
     var r = globalRunningOrder;
-
-    for (var i = 0; i < r.length; i++) {
-      var nextRider = i;
-      if (i + 1 < r.length) {
-        nextRider++;
-      }
-      var rand = mulberry32SeedFromInterval((mx.get_rider_number(r[i].slot) + mx.get_rider_number(r[nextRider].slot) * 321) / r.length, 0, weatherTypesArr.length - 1);
-      weatherIndicesForSession[i] = Math.floor(rand());
+    var seed = (mx.get_rider_number(r[0].slot) * 321);
+    for (var i = 0; i < minWeatherTypes; i++) {
+      var rand = mulberry32SeedFromInterval(seed, 0, weatherTypesArr.length - 1);
+      weatherIndicesForSession.push(Math.floor(rand()));
+      seed = (weatherIndicesForSession[weatherIndicesForSession.length - 1] * weatherIndicesForSession.length * 1234);
     }
 
-    // if we have less than the number of minimum weather types scheduled
-    if (weatherIndicesForSession.length < minWeatherTypes) {
-
-      // increase the size of the weather for sessions so it has at least min weather types
-      const timesToDupeArray = Math.ceil(minWeatherTypes / weatherIndicesForSession.length);
-      // hold our original array's length
-      const originalArrLength = weatherIndicesForSession.length;
-
-      var j = 0;
-      var dupeIterations = 0;
-      for (var i = (originalArrLength - 1); i < (originalArrLength * timesToDupeArray); i++) {
-        // if we have one rider pick a random number, otherwise try to get a 'random' number that all clients will share
-        var rand = mulberry32SeedFromInterval((mx.get_rider_number(r[j].slot) * 1234) * (dupeIterations + 1) / r.length, 0, weatherTypesArr.length - 1);
-        weatherIndicesForSession[i] = Math.floor(rand());
-        // if we reached the end of the running order reset j and increment the number of times we've duped the array
-        j++;
-        if (j == originalArrLength) {
-          dupeIterations++;
-          j = 0;
-        }
-      }
-    }
     mx.message("First weather type: " + weatherTypesArr[weatherIndicesForSession[0]]);
     mx.message("Weather Types for Session: [");
     for (var i = 0; i < weatherIndicesForSession.length; i++) {
@@ -1095,8 +1099,8 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       weatherDurations.push(rand());
       // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
       timesWeatherStarted.push(timeStarted);
-      mx.message("Weather Durations: " + weatherDurations.toString());
-      mx.message("Times Started: " + timesWeatherStarted.toString());
+      //mx.message("Weather Durations: " + weatherDurations.toString());
+      //mx.message("Times Started: " + timesWeatherStarted.toString());
     }
     // Get the index of our durations and times started and store the current duration and time started
     durationOfWeatherType = weatherDurations[index];
@@ -1114,15 +1118,20 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       }
       prevWeather = weatherTypesArr[weatherIndicesForSession[prevWeatherIndex]];
       // if the next weather is not thunder and the previous weather cycle did have thunder increment the current lightning cycle
-      if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
-        // only add the total if this lightning cycle is undefined
-        if (totalLightningStrikesInCycle[currentLightningCycle] === undefined) {
-          totalLightningStrikesInCycle.push(lightningStrikesThisThunderCycle);
+      try {
+        if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
+          // only add the total if this lightning cycle is undefined
+          if (totalLightningStrikesInCycle[currentLightningCycle] === undefined) {
+            totalLightningStrikesInCycle.push(lightningStrikesThisThunderCycle);
+          }
+          // reset the lightning strikes for this thunder cycle
+          lightningStrikesThisThunderCycle = 0;
+          currentLightningCycle++;
+          // mx.message("current lightning cycle: " + currentLightningCycle.toString());
         }
-        // reset the lightning strikes for this thunder cycle
-        lightningStrikesThisThunderCycle = 0;
-        currentLightningCycle++;
-        // mx.message("current lightning cycle: " + currentLightningCycle.toString());
+      } catch (e) {
+        mx.message(colors.red + "Exception Here 1: " + e.toString() + colors.normal);
+        mx.message(colors.red + "Prev Weather Index: " + weatherTypeIndex.toString() + " | Current Weather Index: " + currentWeatherIndex.toString() + colors.normal);
       }
     }
   }
@@ -1157,7 +1166,7 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
     
     // if the previous weather cycle included thunder and the current one did not decrement the lightning cycle index
     
-    if (index > 0) {
+    if (index >= 0) {
       var prevWeather = weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]];
       var currentWeatherIndex = weatherTypeIndex + 1;
       if (currentWeatherIndex == weatherIndicesForSession.length) {
@@ -1165,19 +1174,25 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       }
       var currentWeather = weatherTypesArr[weatherIndicesForSession[currentWeatherIndex]];
 
-      // if the previous weather has thunder and the current does not then do work
-      if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
-        // decrement the current lightning cycle and pop the last element of total lightning strikes in cycle
-        currentLightningCycle--;
-  
-        // get the total lightning strikes in the previous cycle then remove it from the array
-        lightningStrikesThisThunderCycle = totalLightningStrikesInCycle[currentLightningCycle];
-  
-        // get the previous time of lightning strike, reset the delay for another lighting, and set got time of lightning to true
-        timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
-        delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
-        // mx.message("current lightning cycle: " + currentLightningCycle.toString());
+      try {
+        // if the previous weather has thunder and the current does not then do work
+        if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
+          // decrement the current lightning cycle and pop the last element of total lightning strikes in cycle
+          currentLightningCycle--;
+        
+          // get the total lightning strikes in the previous cycle then remove it from the array
+          lightningStrikesThisThunderCycle = totalLightningStrikesInCycle[currentLightningCycle];
+        
+          // get the previous time of lightning strike, reset the delay for another lighting, and set got time of lightning to true
+          timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
+          delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+          // mx.message("current lightning cycle: " + currentLightningCycle.toString());
+        }
+      } catch (e) {
+        mx.message(colors.green + "Exception Here 2: " + e.toString() + colors.normal);
+        mx.message(colors.green + "Prev Weather Index: " + weatherTypeIndex.toString() + " | Current Weather Index: " + currentWeatherIndex.toString() + colors.normal);
       }
+      
     }
 
     durationOfWeatherType = weatherDurations[index];
@@ -1198,6 +1213,9 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
 
 function convertIndexToWeatherType(index) {
   var convertedWeatherTypeIndex = index - (iterationThroughWeatherIndices * weatherIndicesForSession.length);
+  if (convertedWeatherTypeIndex === weatherIndicesForSession.length) {
+    convertedWeatherTypeIndex = 0;
+  }
   return weatherTypesArr[weatherIndicesForSession[convertedWeatherTypeIndex]];
 }
 
@@ -1606,7 +1624,7 @@ function moveRainBillboards(type, alphaStart) {
         type.billboardArr[index].z = billboard_z;
         mx.move_billboard(type.indexStart + index, type.billboardArr[index].x, type.billboardArr[index].y, type.billboardArr[index].z);
       }
-      
+
   	}
   }
 }
@@ -1666,7 +1684,10 @@ function mulberry32SeedFromInterval(a, min, max) {
     t = Math.imul(t ^ t >>> 15, t | 1);
     t ^= t + Math.imul(t ^ t >>> 7, t | 61);
     var num = ((t ^ t >>> 14) >>> 0) / 4294967296;
-    return (num * (max - min)) + min;
+
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    return (num * (max - min + 1)) + min;
   }
 }
 // converts raw seconds to formatted time
