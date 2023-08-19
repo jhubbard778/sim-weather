@@ -374,24 +374,60 @@ const thunderTypes = [
   heavyThunder
 ];
 
-var lightningTextureIndex; // Holds the current index of lightning textures
+var currentLightningIndex; // Holds the current index of lightning textures
+var lightningSize; // Holds the current lightning billboard size
+var lightningBillboardIndices; // Holds the lightning billboard indices
+
 const lightningTextureDirectory = "@" + trackFolderName + "/billboard/lightning/";
 const lightningTextures = {
-  textures: [
-    lightningTextureDirectory + "1.seq",
-    lightningTextureDirectory + "2.seq",
-    lightningTextureDirectory + "3.seq",
+  textureDirectories: [
+    lightningTextureDirectory + "tex1/lightning1.seq",
+    lightningTextureDirectory + "tex1mirrored/lightning1mirrored.seq",
+    lightningTextureDirectory + "tex2/lightning2.seq",
+    lightningTextureDirectory + "tex2mirrored/lightning2mirrored.seq",
   ],
-  sizes: [60,60,60],
-  aspects: [1,1,1],
-  get textureIndices() {
-    var textures = [];
-    for (var i = 0; i < this.textures.length; i++) {
-      textures.push(mx.read_texture(this.textures[i]));
+  aspects: [1,1,1,1], // aspect ratio for each billboard
+  delays: [3,3,3,3], // delay between frames in 1/128 second units for each animation
+  maxframes: [14,14,15,15], // total frames for each animation
+  sizeRange: [350, 500], // size range for the billboards
+  get textureIDs() { // Holds all texture IDs for custom frame pasting so we can trigger the lightning animations
+    var ids = [];
+    for (var i = 0; i < this.textureDirectories.length; i++) {
+      ids.push(mx.read_texture(this.textureDirectories[i]));
     }
-    return textures;
+    return ids;
   }
 };
+
+
+lightningBillboardIndices = addLightingBillboards();
+mx.message(colors.cyan + "Lightning Billboard Indices: [" + lightningBillboardIndices.toString() + "]");
+mx.message(colors.cyan + "Lightning Texture IDs: [" + lightningTextures.textureIDs.toString() + "]");
+function addLightingBillboards() {
+  var billboardIndices = [];
+  for (var i = 0; i < lightningTextures.textureDirectories.length; i++) {
+    
+    // find the billboard, if its not found add it
+    var billboardIndex = mx.find_billboard(lightningTextures.textureDirectories[i], 0);
+    if (billboardIndex === -1) {
+      billboardIndex = mx.add_billboard(10, 0, 10, lightningTextures.sizeRange[0], lightningTextures.aspects[i], lightningTextures.textureDirectories[i]);
+    }
+
+    mx.color_billboard(billboardIndex, 1, 1, 1, 0);
+
+    // push to the billboard indices list
+    billboardIndices.push(billboardIndex);
+
+    // if there's excess billboards hide them
+    billboardIndex = mx.find_billboard(lightningTextures.textureDirectories[i], billboardIndex + 1);
+    while (billboardIndex !== -1) {
+      mx.color_billboard(billboardIndex, 1, 1, 1, 0);
+      billboardIndex = mx.find_billboard(lightningTextures.textureDirectories[i], billboardIndex + 1);
+    }
+  }
+
+  return billboardIndices;
+}
 
 
 function setRainTypeByWeatherType(weatherType) {
@@ -546,6 +582,12 @@ function doThunderAndLightning(seconds) {
   if (seconds < allTimesGotLightningStrikes[allTimesGotLightningStrikes.length - 1] && gotTimeLightning && seconds < lastThunderUpdateTime) {
 
     mx.message("last time got lightning strike: " + timeToString(allTimesGotLightningStrikes[allTimesGotLightningStrikes.length - 1] - gateDropTime));
+    
+    // stop the lightning animation if we have one
+    if (lightningAnimationHappening === true) {
+      stopLightningAnimation(currentLightningIndex);
+    }
+
     // remove lightning time and time got the lightning strike
     allLightningStrikeTimes.pop();
     allTimesGotLightningStrikes.pop();
@@ -595,6 +637,10 @@ function doThunderAndLightning(seconds) {
       lightningCoords.y = slotCoords[1];
       lightningCoords.z = slotCoords[2];
 
+      if (clientSlot !== indexToSmite) {
+        triggerLightningAnimation();
+      }
+
       // wait at least delay seconds for another lightning strike
       delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
       thunderPending = true;
@@ -617,6 +663,8 @@ function doThunderAndLightning(seconds) {
     // TODO: Lightning Animations
     mx.message("Lightning Strike!");
     mx.message("Lightning Strike Coords: (" + (lightningCoords.x).toString() + ", " + (lightningCoords.y).toString() + ", " + (lightningCoords.z).toString() + ")");
+   
+    triggerLightningAnimation();
 
     // wait at least delay seconds for another lightning strike
     delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
@@ -628,7 +676,6 @@ function doThunderAndLightning(seconds) {
   if (thunderPending) {
 
     if (indexToSmite > -1) {
-      
       // if it's less than goodbye time move obunga
       if (canSmite && seconds < goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
         calculateAndMoveObunga();
@@ -641,8 +688,16 @@ function doThunderAndLightning(seconds) {
 
       if (canSmite && clientSlot == smiteList[indexToSmite].slot) return;
 
+      // move the lightning strike coordinates to match the player
+      if (seconds <= goodbyeTimes[indexToSmite]) {
+        var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
+        lightningCoords.x = slotCoords[0];
+        lightningCoords.y = slotCoords[1];
+        lightningCoords.z = slotCoords[2];
+      }
+
       // for others
-      if (!resetGoodbyeList) {
+      if (!resetGoodbyeList && seconds > goodbyeTimes[indexToSmite]) {
         sumOfWeights -= smiteList[indexToSmite].weight;
         smiteList.splice(indexToSmite, 1);
         if (smiteList.length == 0) canSmite = false;
@@ -676,7 +731,7 @@ function doThunderAndLightning(seconds) {
       mx.message("Thunder sound " + (time.toFixed(3)).toString() + " seconds after lightning!");
 
       // if it takes less than 1.5 seconds to reach play a heavy thunder sound
-      currentThunder = (time < 1.5) ? heavyThunder : (time < 3) ? mediumThunder : lightThunder;
+      currentThunder = (time < 1.25) ? heavyThunder : (time < 2.5) ? mediumThunder : lightThunder;
       playThunderSound(currentThunder.sounds, vol, seconds);
       thunderPending = false;
     }
@@ -685,7 +740,9 @@ function doThunderAndLightning(seconds) {
     mx.set_sound_pos(currentThunder.sounds[thunderSoundIndex], pos[0], pos[1], pos[2]);
   }
 
+  lightningAnimation(seconds, currentLightningIndex);
   lastThunderUpdateTime = seconds;
+  
 }
 
 function checkAvailableSmiteTabOut(seconds) {
@@ -730,8 +787,17 @@ function checkAvailableSmiteTabOut(seconds) {
       lastThunderUpdateTime = seconds;
       return;
     }
+
+    // move the lightning strike coordinates to match the player
+    if (seconds <= goodbyeTimes[indexToSmite]) {
+      var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
+      lightningCoords.x = slotCoords[0];
+      lightningCoords.y = slotCoords[1];
+      lightningCoords.z = slotCoords[2];
+    }
+
     // if the player tabbed out wasn't the one getting smiteds
-    if (!resetGoodbyeList) {
+    if (!resetGoodbyeList && seconds > goodbyeTimes[indexToSmite]) {
       sumOfWeights -= smiteList[indexToSmite].weight;
       smiteList.splice(indexToSmite, 1);
       if (smiteList.length == 0) canSmite = false;
@@ -739,6 +805,99 @@ function checkAvailableSmiteTabOut(seconds) {
       indexToSmite = -1;
     }
   }
+}
+
+var lightningAnimationHappening = false;
+var lastLightningAnimationUpdate = 0;
+var currentLightningFrame = 0;
+var timeStartedLightningAnimation = 0;
+var lightningHidden = true;
+var lightningAnimationProperties = {
+  x: 0,
+  y: 0,
+  z: 0,
+  size: lightningTextures.sizeRange[0]
+}
+
+function lightningAnimation(seconds, currentTextureIndex) {
+
+  var lightingTextureID = lightningTextures.textureIDs[currentTextureIndex];
+  var lightningTextureMaxFrames = lightningTextures.maxframes[currentTextureIndex];
+  var lightningFrameDelay = lightningTextures.delays[currentTextureIndex];
+
+  if (lightningAnimationHappening) {
+
+    // if we go backwards in the demo and we are before the trigger of the lightning we want to hide it
+    if (seconds < timeStartedLightningAnimation) {
+      stopLightningAnimation(currentTextureIndex);
+      return;
+    }
+  
+    if (seconds - lastLightningAnimationUpdate < lightningFrameDelay / mx.tics_per_second && seconds >= lastLightningAnimationUpdate) return;
+
+    // if the animation coordinates do not equal the lightning strike coordinates move it
+    if (lightningAnimationProperties.x != lightningCoords.x || lightningAnimationProperties.y != lightningCoords.y || lightningAnimationProperties.z != lightningCoords.z) {
+      lightningAnimationProperties.x = lightningCoords.x;
+      lightningAnimationProperties.y = lightningCoords.y;
+      lightningAnimationProperties.z = lightningCoords.z;
+
+      var billboardIndex = lightningBillboardIndices[currentTextureIndex];
+      mx.move_billboard(billboardIndex, parseFloat(lightningAnimationProperties.x), parseFloat(lightningAnimationProperties.y), parseFloat(lightningAnimationProperties.z));
+    }
+
+    // if the animation size does not equal the lightning size set it
+    if (lightningAnimationProperties.size != lightningSize) {
+      lightningAnimationProperties.size = lightningSize;
+
+      var billboardIndex = lightningBillboardIndices[currentTextureIndex];
+      mx.size_billboard(billboardIndex, parseFloat(lightningAnimationProperties.size));
+    }
+
+    if (lightningHidden) {
+      toggleLightningTexture(currentTextureIndex, 1);
+    }
+
+    lastLightningAnimationUpdate = seconds;
+
+    currentLightningFrame = Math.round((seconds - timeStartedLightningAnimation) / (lightningFrameDelay / mx.tics_per_second));
+
+    if (currentLightningFrame >= lightningTextureMaxFrames) {
+      stopLightningAnimation(currentTextureIndex);
+      return;
+    }
+
+    mx.begin_custom_frame(lightingTextureID);
+    mx.paste_custom_frame(lightingTextureID, currentLightningFrame, 0, 0, 0, 0, 1, 1);
+    mx.end_custom_frame(lightingTextureID);
+  }
+}
+
+function toggleLightningTexture(textureIndex, value) {
+  var billboardIndex = lightningBillboardIndices[textureIndex];
+  mx.color_billboard(billboardIndex, 1, 1, 1, value);
+
+  lightningHidden = false;
+  if (value === 0) {
+    lightningHidden = true;
+  }
+}
+
+function triggerLightningAnimation() {
+  lightningHidden = true;
+  currentLightningFrame = 0;
+  lastLightningAnimationUpdate = 0;
+  lightningAnimationHappening = true;
+  timeStartedLightningAnimation = timeLightningStrike;
+
+  mx.message("");
+  mx.message(colors.yellow + "Lightning Size: " + lightningSize.toString());
+  mx.message(colors.yellow + "Lightning Index: " + currentLightningIndex.toString());
+}
+
+function stopLightningAnimation(currentTextureIndex) {
+  toggleLightningTexture(currentTextureIndex, 0);
+  currentLightningFrame = 0;
+  lightningAnimationHappening = false;
 }
 
 function catchUpLightningStrikes(seconds) {
@@ -972,27 +1131,36 @@ function getLightningStrikeIntervals(weatherType) {
 
 function setLightningStrikeCoords(lightningStrikeTime) {
   // set the lightning texture index
-  rand = mulberry32SeedFromInterval(lightningStrikeTime * 12345, 0, lightningTextures.textures.length - 1);
-  lightningTextureIndex = Math.floor(rand());
+  rand = mulberry32SeedFromInterval(lightningStrikeTime * 123, 0, lightningTextures.textureDirectories.length - 1);
+  currentLightningIndex = Math.floor(rand());
+
+  rand = mulberry32SeedFromInterval(lightningStrikeTime * 321, lightningTextures.sizeRange[0], lightningTextures.sizeRange[1]);
+  lightningSize = rand().toFixed(6);
 
   rand = mulberry32SeedFromInterval(lightningStrikeTime * 100, minCoords, maxCoords);
-  lightningCoords.x = rand();
+  lightningCoords.x = rand().toFixed(6);
 
-  rand = mulberry32SeedFromInterval(lightningStrikeTime * 10000, minCoords, maxCoords);
-  lightningCoords.z = rand();
+  rand = mulberry32SeedFromInterval(lightningStrikeTime * 1234, minCoords, maxCoords);
+  lightningCoords.z = rand().toFixed(6);
 
   // check if the lightning strike happens inside the map
   var lightningInsideMap = (lightningCoords.x >= 0 && lightningCoords.z >= 0 && lightningCoords.x <= terrain.dimensions && lightningCoords.z <= terrain.dimensions) ? true : false;
 
-  // get elevation of terrain at lightning strike coords x and z, and add half the height of the current lightning texture
-  var height = mx.get_elevation(lightningCoords.x, lightningCoords.z) + (lightningTextures.sizes[lightningTextureIndex] / 2);
+  if (lightningInsideMap === false) {
+    lightningSize *= 2.5;
+  }
 
-  // if the lightning is inside the map it will be at the height of the elevation, otherwise range it between that and triple the height
-  var height2 = (lightningInsideMap) ? height : height * 3;
+  // set the initial height to zero
+  var groundLevel = 0;
+
+  // if the lightning is inside the map it will be at ground level, otherwise range it between the ground level and the elevation height
+  var maxHeight = (lightningInsideMap === true) ? groundLevel : (mx.get_elevation(lightningCoords.x, lightningCoords.z) * 2);
+
+  var lightningHeightSeed = parseFloat(lightningCoords.x) + parseFloat(lightningCoords.z);
 
   // Seed the random number with the coordinates of the x and z
-  rand = mulberry32SeedFromInterval(lightningCoords.x + lightningCoords.z, height, height2);
-  lightningCoords.y = rand();
+  rand = mulberry32SeedFromInterval(lightningHeightSeed, groundLevel, maxHeight);
+  lightningCoords.y = rand().toFixed(6);
 }
 
 function playThunderSound(arr, vol, seconds) {
@@ -1105,7 +1273,7 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
     // Get the index of our durations and times started and store the current duration and time started
     durationOfWeatherType = weatherDurations[index];
     timeWeatherStarted = timesWeatherStarted[index];
-    mx.message("weather type changed to: " + weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]]);
+    mx.message("weather type changed to: " + weatherTypesArr[weatherIndicesForSession[weatherTypeIndex]]) + " | index: " + weatherTypeIndex.toString();
     mx.message("duration of new weather: " + timeToString(durationOfWeatherType) + "s");
     mx.message("time weather started: " + timeToString(timeWeatherStarted));
 
@@ -1680,13 +1848,16 @@ function getDistance3D(x1,y1,z1,x2,y2,z2) {return Math.sqrt(Math.pow(x2 - x1, 2)
 
 function mulberry32SeedFromInterval(a, min, max) {
   return function() {
+    min = Math.ceil(min);
+    max = Math.floor(max);
+    if (min === max) {
+      return min;
+    }
+
     var t = a += 0x6D2B79F5;
     t = Math.imul(t ^ t >>> 15, t | 1);
     t ^= t + Math.imul(t ^ t >>> 7, t | 61);
     var num = ((t ^ t >>> 14) >>> 0) / 4294967296;
-
-    min = Math.ceil(min);
-    max = Math.floor(max);
     return (num * (max - min + 1)) + min;
   }
 }
