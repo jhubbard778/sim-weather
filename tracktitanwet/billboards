@@ -248,3 +248,7 @@
 [522.433472 0.000000 321.589203] 80.000000 1.000000 @tracktitanwet/billboard/rain/light-rain/lightrain.seq
 [578.078613 0.000000 341.586700] 80.000000 1.000000 @tracktitanwet/billboard/rain/light-rain/lightrain.seq
 [571.992432 0.000000 239.860382] 80.000000 1.000000 @tracktitanwet/billboard/rain/light-rain/lightrain.seq
+[1000.000000 0.000000 1000.000000] 100.000000 1.000000 @tracktitanwet/billboard/lightning/tex1/lightning1.seq
+[1000.000000 0.000000 1050.000000] 100.000000 1.000000 @tracktitanwet/billboard/lightning/tex1mirrored/lightning1mirrored.seq
+[1000.000000 0.000000 1100.000000] 100.000000 1.000000 @tracktitanwet/billboard/lightning/tex2/lightning2.seq
+[1000.000000 0.000000 1150.000000] 100.000000 1.000000 @tracktitanwet/billboard/lightning/tex2mirrored/lightning2mirrored.seq
