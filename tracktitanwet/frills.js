@@ -842,7 +842,7 @@ function lightningAnimation(seconds, currentTextureIndex) {
       lightningAnimationProperties.z = lightningCoords.z;
 
       var billboardIndex = lightningBillboardIndices[currentTextureIndex];
-      mx.move_billboard(billboardIndex, parseFloat(lightningAnimationProperties.x), parseFloat(lightningAnimationProperties.y), parseFloat(lightningAnimationProperties.z));
+      mx.move_billboard(billboardIndex, lightningAnimationProperties.x, lightningAnimationProperties.y, lightningAnimationProperties.z);
     }
 
     // if the animation size does not equal the lightning size set it
@@ -850,7 +850,7 @@ function lightningAnimation(seconds, currentTextureIndex) {
       lightningAnimationProperties.size = lightningSize;
 
       var billboardIndex = lightningBillboardIndices[currentTextureIndex];
-      mx.size_billboard(billboardIndex, parseFloat(lightningAnimationProperties.size));
+      mx.size_billboard(billboardIndex, lightningAnimationProperties.size);
     }
 
     if (lightningHidden) {
@@ -1131,17 +1131,17 @@ function getLightningStrikeIntervals(weatherType) {
 
 function setLightningStrikeCoords(lightningStrikeTime) {
   // set the lightning texture index
-  rand = mulberry32SeedFromInterval(lightningStrikeTime * 123, 0, lightningTextures.textureDirectories.length - 1);
+  var rand = mulberry32SeedFromInterval(lightningStrikeTime * 123, 0, lightningTextures.textureDirectories.length - 1);
   currentLightningIndex = Math.floor(rand());
 
   rand = mulberry32SeedFromInterval(lightningStrikeTime * 321, lightningTextures.sizeRange[0], lightningTextures.sizeRange[1]);
-  lightningSize = rand().toFixed(6);
+  lightningSize = +rand().toFixed(6); // use plus sign to implicitly change the .toFixed() return string back into a number
 
   rand = mulberry32SeedFromInterval(lightningStrikeTime * 100, minCoords, maxCoords);
-  lightningCoords.x = rand().toFixed(6);
+  lightningCoords.x = +rand().toFixed(6);
 
   rand = mulberry32SeedFromInterval(lightningStrikeTime * 1234, minCoords, maxCoords);
-  lightningCoords.z = rand().toFixed(6);
+  lightningCoords.z = +rand().toFixed(6);
 
   // check if the lightning strike happens inside the map
   var lightningInsideMap = (lightningCoords.x >= 0 && lightningCoords.z >= 0 && lightningCoords.x <= terrain.dimensions && lightningCoords.z <= terrain.dimensions) ? true : false;
@@ -1156,11 +1156,9 @@ function setLightningStrikeCoords(lightningStrikeTime) {
   // if the lightning is inside the map it will be at ground level, otherwise range it between the ground level and the elevation height
   var maxHeight = (lightningInsideMap === true) ? groundLevel : (mx.get_elevation(lightningCoords.x, lightningCoords.z) * 2);
 
-  var lightningHeightSeed = parseFloat(lightningCoords.x) + parseFloat(lightningCoords.z);
-
   // Seed the random number with the coordinates of the x and z
-  rand = mulberry32SeedFromInterval(lightningHeightSeed, groundLevel, maxHeight);
-  lightningCoords.y = rand().toFixed(6);
+  rand = mulberry32SeedFromInterval((lightningCoords.x + lightningCoords.z), groundLevel, maxHeight);
+  lightningCoords.y = +rand().toFixed(6);
 }
 
 function playThunderSound(arr, vol, seconds) {
