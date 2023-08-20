@@ -310,33 +310,45 @@ function setRainLoops() {
   rainName: acts as an identifier from the weather type for this rain type
   vol: maximum volume of the rain sounds
   texture: the texture of the sequence file of rain
-  indexStart: the first index identifier for the rain billboards
+  size: holds the size for each rain billboard
+  aspect: holds the aspect ratio for each rain billboard
+  maxBillboardHeight: the maximum height of the billboard in feet before the it starts following the camera
   sounds: the respective rain sounds
   billboardArr: holds a list of objects that store each billboards [x,y,z] position and alpha
+  billboardIndexMap: an array that maps a billboardArr index to a rain billboard index
 } */
 const lightRain = {
   rainName: "light-rain",
   vol: 1,
   texture: "@" + trackFolderName + "/billboard/rain/light-rain/lightrain.seq",
-  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  size: 80,
+  aspect: 1,
+  maxBillboardHeight: 80,
   sounds: lightRainSounds,
-  billboardArr: []
+  billboardArr: [],
+  billboardIndexMap: [],
 };
 const mediumRain = {
   rainName: "med-rain",
   vol: 2,
   texture: "@" + trackFolderName + "/billboard/rain/rain/rain.seq",
-  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  size: 80,
+  aspect: 1,
+  maxBillboardHeight: 80,
   sounds: medRainSounds,
-  billboardArr: []
+  billboardArr: [],
+  billboardIndexMap: [],
 };
 const heavyRain = {
   rainName: "heavy-rain",
   vol: 4,
   texture: "@" + trackFolderName + "/billboard/rain/heavy-rain/heavyrain.seq",
-  get indexStart() {return mx.find_billboard(this.texture, 0);},
+  size: 80,
+  aspect: 1,
+  maxBillboardHeight: 80,
   sounds: heavyRainSounds,
-  billboardArr: []
+  billboardArr: [],
+  billboardIndexMap: [],
 };
 
 const rainTypes = [
@@ -512,7 +524,7 @@ function doThunderAndLightning(seconds) {
   if (currentWeatherType === undefined) return;
 
   // if seconds is greater we'll assume that the player tabbed out and grab a lightning strike first before switching weather
-  if (seconds < lastThunderUpdateTime + 1.25 || weatherTypeIndex === -1) {
+  if (seconds < lastThunderUpdateTime + 1.25 || !gateDropped) {
     // if the weathertypeindex is -1 we will still grab it anyways to check if we can switch it to zero
     currentWeatherType = getWeatherType(seconds);
     
@@ -1250,6 +1262,12 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       weatherTypeIndex = 0;
       iterationThroughWeatherIndices++;
     }
+
+    /* somehow I ran into a bug where the gate dropped and the weather type returned undefined when joining a server on gate drop 
+      so I have no idea if this'll fix it or not */
+    if (weatherTypeIndex === -1) {
+      weatherTypeIndex = 0;
+    }
     
     // Convert the weather type index to terms of lengths for the duration and times arrays
     var index = weatherTypeIndex + (iterationThroughWeatherIndices * weatherIndicesForSession.length);
@@ -1663,43 +1681,47 @@ const grid = {
   get area() {return this.count * this.count;}
 };
 
-var isEnoughBillboards = true;
-for (var i = 0; i < rainTypes.length; i++) {
-  if (!checkEnoughBillboards(rainTypes[i])) {
-    isEnoughBillboards = false;
-    break;
-  }
-}
+// add rain billboards then hide each billboard
+addRainBillboards();
+hideAllRainBillboards(undefined);
 
-if (isEnoughBillboards) {
-  // hide every billboard
-  hideAllRainBillboards(undefined);
-  for (var i = 0; i < grid.area; i++) {
-    for (j = 0; j < rainTypes.length; j++) {
-      rainTypes[j].billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});
-    }
-  }
-}
-function checkEnoughBillboards(type) {
-  if (type.indexStart > -1) {
-    var lastIndexFound = type.indexStart;
-    var numRainBillboards = 1;
-    isEnoughBillboards = true;
-    for (var i = type.indexStart + 1; lastIndexFound == i - 1; i++) {
-      lastIndexFound = mx.find_billboard(type.texture, i);
-      if (lastIndexFound == -1) break;
-      numRainBillboards++;
-    }
+function addRainBillboards() {
   
-    if (numRainBillboards < grid.area) {
-      mx.message("Error...not enough rain sequence billboards in a row in billboards file | Missing Billboards: " + (grid.area - numRainBillboards).toString());
-      return false;
+  for (var i = 0; i < rainTypes.length; i++) {
+    var numberBillboards = 0;
+    var lastBillboardIndex = -1;
+    var rainType = rainTypes[i];
+
+    // find billboards and add if necessary
+    do {
+      // find the last billboard index that matches the texture
+      lastBillboardIndex = mx.find_billboard(rainType.texture, lastBillboardIndex + 1);
+      
+      // if we couldn't find one add it
+      if (lastBillboardIndex === -1) {
+        lastBillboardIndex = mx.add_billboard(0, 0, 0, rainType.size, rainType.aspect, rainType.texture);
+      } else { // otherwise resize the one we found to make sure it's the correct size
+        mx.size_billboard(lastBillboardIndex, rainType.size);
+      }
+      numberBillboards++;
+
+      // add the billboard index to the billboard index map
+      rainType.billboardIndexMap.push(lastBillboardIndex);
+
+    } while (numberBillboards < grid.area);
+
+    mx.message(colors.green + rainType.rainName + " billboard Map: " + rainType.billboardIndexMap.toString() + colors.normal);
+
+    // hide any excess billboards
+    do {
+      lastBillboardIndex = mx.find_billboard(rainType.texture, lastBillboardIndex + 1);
+      mx.color_billboard(lastBillboardIndex, 1, 1, 1, 0);
+    } while (lastBillboardIndex !== -1);
+
+    // add billboard objects that store location and alpha properties for each rain billboard
+    for (var j = 0; j < grid.area; j++) {
+      rainType.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});
     }
-  
-    if (numRainBillboards > grid.area) {
-      mx.message("Warning...too many rain billboards | Excess billboards: " + (numRainBillboards - grid.area).toString());
-    }
-    return true;
   }
 }
 
@@ -1713,10 +1735,7 @@ function isBillboardInNoRainSpot(x, z) {
   return -1;
 }
 
-const rainBillboardMaxHeight = 80;
-
-function moveRainBillboards(type, alphaStart) {
-  if (!isEnoughBillboards) return;
+function moveRainBillboards(rainType, alphaStart) {
   for (var z = 0; z < grid.count; z++) {
   	for (var x = 0; x < grid.count; x++) {
       var camx = pos[0], camy = pos[1], camz = pos[2];
@@ -1731,73 +1750,72 @@ function moveRainBillboards(type, alphaStart) {
       if (alpha < 0) alpha = 0;
 
       var index = x + z * grid.count;
+      var billboardIndex = rainType.billboardIndexMap[index];
       
       // Change the alpha of the rain billboards if we have a new alpha level
-      if (type.billboardArr[index].alpha != alpha) {
-        type.billboardArr[index].alpha = alpha;
-        mx.color_billboard(type.indexStart + index, 1, 1, 1, type.billboardArr[index].alpha);
+      if (rainType.billboardArr[index].alpha != alpha) {
+        rainType.billboardArr[index].alpha = alpha;
+        mx.color_billboard(billboardIndex, 1, 1, 1, rainType.billboardArr[index].alpha);
       }
 
-      var billboardNoRainIndex = isBillboardInNoRainSpot(billboard_x, billboard_z);
-
+      var noRainSpotIndex = isBillboardInNoRainSpot(billboard_x, billboard_z);
       var camHeightAboveTerrain = camy - mx.get_elevation(camx, camz);
       var moveY = false;
       
-      if (camHeightAboveTerrain <= (rainBillboardMaxHeight / 2)) {
+      if (camHeightAboveTerrain <= (rainType.maxBillboardHeight / 2)) {
         // move the billboard if it's in a no rain spot to the desired height
-        if (billboardNoRainIndex > -1 && type.billboardArr[index].y !== noRainSpots[billboardNoRainIndex].billboardHeight) {
-          type.billboardArr[index].y = noRainSpots[billboardNoRainIndex].billboardHeight;
-          //mx.message(colors.yellow + "NO RAIN BILLBOARD: ["+type.billboardArr[index].x.toString() + ", " + type.billboardArr[index].y.toString() + ", " + type.billboardArr[index].z.toString()+"]" + colors.normal);
+        if (noRainSpotIndex > -1 && rainType.billboardArr[index].y !== noRainSpots[noRainSpotIndex].billboardHeight) {
+          rainType.billboardArr[index].y = noRainSpots[noRainSpotIndex].billboardHeight;
+          //mx.message(colors.yellow + "NO RAIN BILLBOARD: ["+rainType.billboardArr[index].x.toString() + ", " + rainType.billboardArr[index].y.toString() + ", " + rainType.billboardArr[index].z.toString()+"]" + colors.normal);
           moveY = true;
         }
         // otherwise if it's not in a no rain spot and the y level isn't zero set to zero
-        else if (billboardNoRainIndex === -1 && type.billboardArr[index].y !== 0) {
-          type.billboardArr[index].y = 0;
+        else if (noRainSpotIndex === -1 && rainType.billboardArr[index].y !== 0) {
+          rainType.billboardArr[index].y = 0;
           moveY = true;
         }
       }
 
       /* Put the billboard Y level so it's centered in the middle of the billboard,
-      so the billboard height is camheight - rainBillboardMaxHeight / 2 */
+      so the billboard height is camheight - rainType.maxBillboardHeight / 2 */
 
-      if (camHeightAboveTerrain > rainBillboardMaxHeight / 2) {
-        var newHeight = camHeightAboveTerrain - (rainBillboardMaxHeight / 2);
+      if (camHeightAboveTerrain > rainType.maxBillboardHeight / 2) {
+        var newHeight = camHeightAboveTerrain - (rainType.maxBillboardHeight / 2);
         
         // if the billboard is in a no rain spot
-        if (billboardNoRainIndex > -1) {
-          const noRainHeight = noRainSpots[billboardNoRainIndex].billboardHeight;
+        if (noRainSpotIndex > -1) {
+          const noRainHeight = noRainSpots[noRainSpotIndex].billboardHeight;
           // if the no rain spot desired height is above the new height set it
-          if (newHeight < noRainHeight && type.billboardArr[index].y !== noRainHeight) {
-            type.billboardArr[index].y = noRainHeight;
+          if (newHeight < noRainHeight && rainType.billboardArr[index].y !== noRainHeight) {
+            rainType.billboardArr[index].y = noRainHeight;
             moveY = true;
           } 
           // otherwise if the new height is greater than the no rain height set the billboard to the new height
-          else if (newHeight > noRainHeight && type.billboardArr[index].y !== newHeight) {
-            type.billboardArr[index].y = newHeight;
+          else if (newHeight > noRainHeight && rainType.billboardArr[index].y !== newHeight) {
+            rainType.billboardArr[index].y = newHeight;
             moveY = true;
           }
         }
         // if the billboard is not in a no rain spot and the y value of the billboard isn't the new height set it
-        else if (type.billboardArr[index].y !== newHeight) {
-          type.billboardArr[index].y = newHeight;
+        else if (rainType.billboardArr[index].y !== newHeight) {
+          rainType.billboardArr[index].y = newHeight;
           moveY = true;
         }
       }
 
       // If we need to move the grid point
-      if (type.billboardArr[index].x != billboard_x || type.billboardArr[index].z != billboard_z || moveY) {
-        type.billboardArr[index].x = billboard_x;
-        type.billboardArr[index].z = billboard_z;
-        mx.move_billboard(type.indexStart + index, type.billboardArr[index].x, type.billboardArr[index].y, type.billboardArr[index].z);
+      if (rainType.billboardArr[index].x != billboard_x || rainType.billboardArr[index].z != billboard_z || moveY) {
+        rainType.billboardArr[index].x = billboard_x;
+        rainType.billboardArr[index].z = billboard_z;
+        mx.move_billboard(billboardIndex, rainType.billboardArr[index].x, rainType.billboardArr[index].y, rainType.billboardArr[index].z);
       }
-
   	}
   }
 }
 
-function hideRainBillboards(rainobj) {
-  for (var i = rainobj.indexStart; i < rainobj.indexStart + grid.area; i++) {
-    mx.color_billboard(i, 1, 1, 1, 0);
+function hideRainBillboards(rainType) {
+  for (var i = 0; i < rainType.billboardIndexMap.length; i++) {
+    mx.color_billboard(rainType.billboardIndexMap[i], 1, 1, 1, 0);
   }
 }
 
