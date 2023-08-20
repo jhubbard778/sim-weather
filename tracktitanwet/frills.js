@@ -1,26 +1,346 @@
-const trackFolderName = "tracktitanwet";
-const terrain = {
-  // terrain.png dimensions
-  size: 2049,
-  // terrain.hf track scale
-  scale: 1,
-  // track max dimensions in game
-  get dimensions() {return (this.size - 1) * this.scale;},
+/*
+--------------
+  Track Info
+--------------
+The trackInfo object is an object that holds the following properties:
+  folderName: the folder name of the current track
+  terrain_size: the terrain.png dimensions
+  terrain_scale: the scale specified in the terrain.hf file
+  dimensions: holds the track map dimensions by calculating the terrain size times the terrain scale
+  center: gets the center coordinate of the dimensions of the map
+*/
+
+const trackInfo = {
+  folderName: "tracktitanwet",
+  terrain_size: 2049,
+  terrain_scale: 1,
+  get dimensions() {return (this.terrain_size - 1) * this.terrain_scale;},
   get center() {return this.dimensions / 2;}
 };
 
 /*
-- If a rain billboard is in an area covered by the vertices specified, move the billboard
-- to at least a height specified by billboardHeight
+---------------
+ No Rain Spots
+---------------
+Description - an array of objects with the following properties:
+  vertices: holds the vertices of an imaginary polygon, the last vertex will 'draw' an edge to the first vertex
+  billboardHeight: specifies the desired height to move a rain billboard if within the polygon
 
-- If one billboard overlaps two no rain spots, it will prioritize the first and break out of that loop
+Function - if a rain billboard is in a no rain spot specified by the vertices, move the
+billboard to at least a height specified by the billboardHeight property. If a rain billboard
+overlays two no rain spots it will prioritize the first no rain spot.
 */
 const noRainSpots = [
-  { // Test
+  {
     vertices: [[0,0],[290,0],[197,195],[0,250]],
     billboardHeight: 100
   },
 ];
+
+/*
+-------------------------
+  Lightning/Rain Sounds
+-------------------------
+Each rain/lightning sound type will have:
+  - An array of directories for the corresponding sounds
+  - An array of frequencies for the corresponding sounds
+*/
+
+const lightRainSoundDirectories = [
+  "@" + trackInfo.folderName + "/sounds/weather/rain/lightrain.raw"
+];
+const lightRainSoundFreqs = [44100];
+
+const medRainSoundDirectories = [
+  "@" + trackInfo.folderName + "/sounds/weather/rain/rain.raw"
+];
+const medRainSoundFreqs = [44100];
+
+const heavyRainSoundDirectories = [
+  "@" + trackInfo.folderName + "/sounds/weather/rain/heavyrain.raw"
+];
+const heavyRainSoundFreqs = [44100];
+
+// Distant ambient thunder sounds
+const lightThunderDirectories = [
+  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder1.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder2.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder3.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder4.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder5.raw",
+];
+const lightThunderSoundFreqs = [44100,44100,44100,44100,44100];
+
+// Basic thunder sounds
+const medThunderDirectories = [
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder1.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder2.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder3.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder4.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder5.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder6.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder7.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder8.raw",
+];
+const medThunderSoundFreqs = [44100,44100,44100,44100,44100,44100,44100,44100];
+
+// Heavy thunder sounds
+const heavyThunderDirectories = [
+  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder1.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
+  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder5.raw",
+];
+const heavyThunderSoundFreqs = [44100,44100,44100,44100,44100];
+
+/*
+--------------
+ Rain Objects
+--------------
+Each rain type will have an object with the following propeties:
+  rainName: acts as an identifier for the weather type to point to this rain type
+  vol: maximum volume of the rain sounds
+  texture: the texture of the sequence file of rain
+  size: holds the size for each rain billboard
+  aspect: holds the aspect ratio for each rain billboard
+  maxBillboardHeight: the maximum height of the billboard in feet before the it starts following the camera
+  sounds: the respective rain sounds (leave empty)
+  sounddirs: the sound directories for the desired rain type
+  freqs: the sound frequencies for the desired rain type
+  billboardArr: holds a list of objects that store each billboards [x,y,z] position and alpha
+  billboardIndexMap: an array that maps a billboardArr index to a rain billboard index
+  gridsize: how many feet are in between each grid point (feet between each rain billboard)
+  gridcount: how many grid points along each edge (how many rain billboards)
+  gridarea: the total count of grid points (total rain billboard count)
+*/
+
+function RainType(rainName, vol, texture, size, aspect, maxBillboardHeight, sounddirs, freqs, gridsize, gridcount) {
+  this.rainName = rainName;
+  this.vol = vol;
+  this.texture = texture;
+  this.size = size;
+  this.aspect = aspect;
+  this.maxBillboardHeight = maxBillboardHeight;
+  this.sounds = [];
+  this.sounddirs = sounddirs;
+  this.freqs = freqs;
+  this.billboardArr = [];
+  this.billboardIndexMap = [];
+  this.gridsize = gridsize;
+  this.gridcount = gridcount;
+  this.gridarea = gridcount * gridcount;
+}
+
+const lightRain = new RainType("light-rain", 1, "@" + trackInfo.folderName + "/billboard/rain/light-rain/lightrain.seq", 80, 1, 80, lightRainSoundDirectories, lightRainSoundFreqs, 45, 9);
+const mediumRain = new RainType("med-rain", 2, "@" + trackInfo.folderName + "/billboard/rain/med-rain/medrain.seq", 80, 1, 80, medRainSoundDirectories, medRainSoundFreqs, 45, 9);
+const heavyRain = new RainType("heavy-rain", 4, "@" + trackInfo.folderName + "/billboard/rain/heavy-rain/heavyrain.seq", 80, 1, 80, heavyRainSoundDirectories, heavyRainSoundFreqs, 45, 9);
+
+const rainTypes = [
+  lightRain,
+  mediumRain,
+  heavyRain
+];
+
+/* 
+-----------------
+ Thunder Objects
+-----------------
+Each thunder type will have an object with the following properties:
+  name: acts as an identifier for the weather type to point to this thunder type
+  sounds: the sound indices for the desired thunder type
+  sounddirs: the sound directories for the desired thunder type
+  freqs: the sound frequencies for the desired thunder type
+  interval: interval between lightning strikes during this type of weather
+*/
+
+function ThunderType(thunderName, sounddirs, freqs, interval) {
+  this.thunderName = thunderName;
+  this.sounds = [];
+  this.sounddirs = sounddirs;
+  this.freqs = freqs;
+  this.interval = interval;
+}
+
+const lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60]);
+const mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30]);
+const heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15]);
+
+const thunderTypes = [
+  lightThunder,
+  mediumThunder,
+  heavyThunder
+];
+
+addWeatherSounds();
+setRainSoundLoops();
+
+var currentLightningIndex; // Holds the current index of the lightning texture we will be using
+var lightningSize; // Holds the current lightning billboard size
+var lightningBillboardIndices; // Holds the lightning billboard indices
+const lightningTextureDirectory = "@" + trackInfo.folderName + "/billboard/lightning/"; // the base lightning directory
+
+/* 
+---------------------
+ Lightning Textures
+---------------------
+Each lightning texture will be an object with the following properties:
+  texture: the texture directory string
+  aspect: the aspect ratio of the lightning billboard
+  delay: the delays between frames in 1/128 second units of the lightning sequence file (3rd number in header of sequence file)
+  framecount: the total number of frames for the lightning sequence file (1st number in header of sequence file)
+  sizeRange: a range of values for which the lightning billboard size should be if it strikes inside the map (this will be multiplied by a factor of 2.5 if outside the map)
+  textureID: the texture ID from game so we can trigger the lightning animation
+  index: the billboard index for the lightning (initialized to undefined then set when adding the billboards)
+*/
+
+function LightningTexture(textureDirectory, aspect, delay, framecount, sizeRange) {
+  this.texture = textureDirectory;
+  this.aspect = aspect;
+  this.delay = delay;
+  this.framecount = framecount;
+  this.sizeRange = sizeRange;
+  this.textureID = mx.read_texture(textureDirectory);
+  this.index = undefined;
+}
+
+const lightningTexture1 = new LightningTexture(lightningTextureDirectory + "tex1/lightning1.seq", 1, 3, 14, [350, 500]);
+const lightningTexture1Mirrored = new LightningTexture(lightningTextureDirectory + "tex1mirrored/lightning1mirrored.seq", 1, 3, 14, [350, 500]);
+const lightningTexture2 = new LightningTexture(lightningTextureDirectory + "tex2/lightning2.seq", 1, 3, 15, [350, 500]);
+const lightningTexture2Mirrored = new LightningTexture(lightningTextureDirectory + "tex2mirrored/lightning2mirrored.seq", 1, 3, 15, [350, 500]);
+
+const lightningTextures = [
+  lightningTexture1,
+  lightningTexture1Mirrored,
+  lightningTexture2,
+  lightningTexture2Mirrored
+];
+
+addLightningBillboards();
+
+/*
+======================================================================================
+Choose which weather types you'd like on you map and throw them into the weather types
+array and make sure they're separated by commas and are strings. Add multiples of the
+same weather type if you want to increase the odds of that weather type being chosen.
+
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+ List of available weather types
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+1) clear
+2) light-rain
+3) med-rain
+4) heavy-rain
+5) light-thunder-no-rain
+6) light-thunder-light-rain
+7) light-thunder-med-rain
+8) light-thunder-heavy-rain
+9) med-thunder-no-rain
+10) med-thunder-light-rain
+11) med-thunder-med-rain
+12) med-thunder-heavy-rain
+13) heavy-thunder-no-rain
+14) heavy-thunder-light-rain
+15) heavy-thunder-med-rain
+16) heavy-thunder-heavy-rain
+
+======================================================================================
+*/
+
+const weatherTypesArr = [
+  "clear", "light-rain", "med-rain", "heavy-rain",
+  "light-thunder-no-rain", "light-thunder-light-rain", "light-thunder-med-rain", "light-thunder-heavy-rain",
+  "med-thunder-no-rain", "med-thunder-light-rain", "med-thunder-med-rain", "med-thunder-heavy-rain",
+  "heavy-thunder-med-rain", "heavy-thunder-heavy-rain"
+];
+
+/*
+-------------
+  Constants
+-------------
+Below are constants you may want to change:
+
+minWeatherTypes: the minimum amount of weather types to go through before cycling back to the first weather type
+baseThunderVolume: the base volume value at a thunder sound 4 seconds after a lightning strike
+mapScalarForLightning: value multiplied by the size of the map, the bounds for lightning strikes. Ex: 1 would mean lightning can only strike inside themap
+rainFadeInTime: the amount of time it takes in seconds for a new rain type to fade to full opacity and volume
+rainFadeOutTime: the amount of time it takes in seconds for a previous rain type to fade out to 0 opacity and mute.
+*/
+
+const minWeatherTypes = 15;
+const baseThunderVolume = 5;
+const mapScalarForLightning = 3;
+const rainFadeInTime = 15;
+const rainFadeOutTime = 15;
+
+/*
+--------------------------------------------
+  Death Screen Properties for Smiting List
+--------------------------------------------
+The death screen properties object is an object that will hold all the necessities for what happens
+to a client should they be struck by lightning. The properties include:
+  bbsize: billboard size
+  bbtexture: billboard texture directory
+  bbaspect: billboard aspect ratio
+  sounddir: sound directory
+  soundfreq: sound frequency
+  soundvol: sound volume
+*/
+const deathScreenProperties = {
+  bbsize: 7,
+  bbtexture: "@" + trackInfo.folderName + "/billboard/rain/donotworry/obunga.png",
+  bbaspect: 1,
+  sounddir: "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/ears.raw",
+  soundfreq: 44100,
+  soundvol: 10
+}
+
+/*
+-----------------
+ People to Smite
+-----------------
+The people to smite variable is an array of objects that holds the following properties:
+  re: the regular expression for the name of the person to smite
+  weight: the weight of chance that person is going to be smited over another person
+*/
+const peopleToSmite = [
+  {re: /\bjosh.*\bgilmore\b/i, weight: 200},
+  {re: /\bbrayden.*\btharp\b/i, weight: 200},
+];
+
+// ANSI color codes for debugging
+const colors = {
+	normal: "\x1b[0m",
+	bright: "\x1b[1m",
+	black: "\x1b[30m",
+	red: "\x1b[31m",
+	green: "\x1b[32m",
+	yellow: "\x1b[33m",
+	blue: "\x1b[34m",
+	magenta: "\x1b[35m",
+	cyan: "\x1b[36m",
+	white: "\x1b[37m",
+	BgRed: "\x1b[41m",
+	BgGreen: "\x1b[42m",
+	BgYellow: "\x1b[43m",
+	BgBlue: "\x1b[44m",
+	BgMagenta: "\x1b[45m",
+	BgCyan: "\x1b[46m"
+};
+
+
+var lightningBillboardIndicesString = "[";
+var lightningTextureIDsString = "[";
+for (var i = 0; i < lightningTextures.length; i++) {
+  lightningBillboardIndicesString += lightningTextures[i].index.toString() + ',';
+  lightningTextureIDsString += lightningTextures[i].textureID.toString() + ',';
+}
+lightningBillboardIndicesString += "]";
+lightningTextureIDsString += "]";
+
+mx.message(colors.cyan + "Lightning Billboard Indices: " + lightningBillboardIndicesString);
+mx.message(colors.cyan + "Lightning Texture IDs: " + lightningTextureIDsString);
 
 // https://www.algorithms-and-technologies.com/point_in_polygon/javascript
 function isPointInPolygon(point, polygon) {
@@ -45,7 +365,7 @@ function isPointInPolygon(point, polygon) {
 function centroid(vertices) {
   var x = 0;
   var y = 0;
-  for(var i = 0; i < vertices.length; i++) {
+  for (var i = 0; i < vertices.length; i++) {
     var point = vertices[i];
     x += point[0];
     y += point[1];
@@ -61,91 +381,6 @@ function distanceFromCentroid(origin, centroid) {
   return getDistance2D(origin[0], origin[1], centroid[0], centroid[1]);
 }
 
-// Different rain sounds depending on weather type.
-var lightRainSounds = [];
-const lightRainSoundDirectories = [
-  "@" + trackFolderName + "/sounds/weather/rain/lightrain.raw"
-];
-
-var medRainSounds = [];
-const medRainSoundDirectories = [
-  "@" + trackFolderName + "/sounds/weather/rain/rain.raw"
-];
-
-var heavyRainSounds = [];
-const heavyRainSoundDirectories = [
-  "@" + trackFolderName + "/sounds/weather/rain/heavyrain.raw"
-];
-
-// Distant ambient thunder sounds
-var lightThunderSounds = [];
-const lightThunderDirectories = [
-  "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder1.raw",
-  "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder2.raw",
-  "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder3.raw",
-  "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder4.raw",
-  "@" + trackFolderName + "/sounds/weather/distant-thunder/distant-thunder5.raw",
-];
-
-// Basic thunder sounds
-var medThunderSounds = [];
-const medThunderDirectories = [
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder1.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder2.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder3.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder4.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder5.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder6.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder7.raw",
-  "@" + trackFolderName + "/sounds/weather/thunder/thunder8.raw",
-];
-
-// Heavy thunder sounds
-var heavyThunderSounds = [];
-const heavyThunderDirectories = [
-  "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder1.raw",
-  "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
-  "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
-  "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
-  "@" + trackFolderName + "/sounds/weather/heavy-thunder/heavy-thunder5.raw",
-];
-
-/*
-======================================================================================
-Choose which weather types you'd like on you map and throw them into the weather types
-array and make sure they're separated by commas and are strings. Add multiples of the
-same weather type if you want to increase the odds of that weather type being chosen.
-
-===============================
-List of available weather types
-===============================
-
-1) clear
-2) light-rain
-3) med-rain
-4) heavy-rain
-5) light-thunder-no-rain
-6) light-thunder-light-rain
-7) light-thunder-med-rain
-8) light-thunder-heavy-rain
-9) med-thunder-no-rain
-10) med-thunder-light-rain
-11) med-thunder-med-rain
-12) med-thunder-heavy-rain
-13) heavy-thunder-no-rain
-14) heavy-thunder-light-rain
-15) heavy-thunder-med-rain
-16) heavy-thunder-heavy-rain
-
-*/
-
-const weatherTypesArr = [
-  "clear", "light-rain", "med-rain", "heavy-rain",
-  "light-thunder-no-rain", "light-thunder-light-rain", "light-thunder-med-rain", "light-thunder-heavy-rain",
-  "med-thunder-no-rain", "med-thunder-light-rain", "med-thunder-med-rain", "med-thunder-heavy-rain",
-  "heavy-thunder-med-rain", "heavy-thunder-heavy-rain"
-];
-
 const firstLapLength = mx.firstLapLength;
 const normalLapLength = mx.normalLapLength;
 
@@ -154,15 +389,13 @@ var gateDropTime;
 var gateDropped = false;
 const clientSlot = mx.get_player_slot();
 
+// Camera Position Array holds position of camera in 3 element array [x,y,z]
+// Camera Rotation Matrix holds rotation of camera in a 3x3 matrix stored as a 9 element array.
+var pos = [], rot = [];
+
 var timeToSmite;
 var smiteList = [];
 var goodbyeTimes = [];
-const peopleToSmite = [
-  {re: /\bjosh.*\bgilmore\b/i, weight: 200},
-  {re: /\bbrayden.*\btharp\b/i, weight: 200},
-];
-
-setUpWeatherSounds();
 
 var canSmite = true;
 var resetGoodbyeList = false;
@@ -181,23 +414,24 @@ function fillSmiteList() {
   }
 }
 
-const obungaSize = 7;
-var obungaBillboard = mx.find_billboard(trackFolderName + "/billboard/rain/donotworry/obunga.png", 0);
-if (obungaBillboard == -1) {
-  var obungaBillboard = mx.add_billboard(0, 0, 0, obungaSize, 1, trackFolderName + "/billboard/rain/donotworry/obunga.png");
+var deathBillboard = mx.find_billboard(deathScreenProperties.bbtexture, 0);
+if (deathBillboard === -1) {
+  deathBillboard = mx.add_billboard(0, 0, 0, deathScreenProperties.bbsize, 1, deathScreenProperties.bbtexture);
+} else { // make sure the death billboard is the correct size
+  mx.size_billboard(deathBillboard, deathScreenProperties.bbsize);
 }
-mx.color_billboard(obungaBillboard, 1, 1, 1, 0);
+mx.color_billboard(deathBillboard, 1, 1, 1, 0);
 
 function godHaveMercyOnYourSoul(coords) {
-  var earrape = mx.add_sound("@" + trackFolderName + "/sounds/weather/heavy-thunder/ears.raw");
-  mx.set_sound_freq(earrape, 44100);
-  mx.set_sound_pos(earrape, coords[0], coords[1], coords[2]);
-  mx.set_sound_vol(earrape, 10);
-  mx.set_sound_loop(earrape, 1);
-  mx.start_sound(earrape);
+  var deathSound = mx.add_sound(deathScreenProperties.sounddir);
+  mx.set_sound_freq(deathSound, deathScreenProperties.soundfreq);
+  mx.set_sound_pos(deathSound, coords[0], coords[1], coords[2]);
+  mx.set_sound_vol(deathSound, deathScreenProperties.soundvol);
+  mx.set_sound_loop(deathSound, 1);
+  mx.start_sound(deathSound);
 
-  calculateAndMoveObunga();
-  mx.color_billboard(obungaBillboard, 1, 1, 1, 1);
+  calculateAndMoveDeathScreen();
+  mx.color_billboard(deathBillboard, 1, 1, 1, 1);
 }
 
 function endGame() {
@@ -206,33 +440,14 @@ function endGame() {
   }
 }
 
-const colors = {
-	normal: "\x1b[0m",
-	bright: "\x1b[1m",
-	black: "\x1b[30m",
-	red: "\x1b[31m",
-	green: "\x1b[32m",
-	yellow: "\x1b[33m",
-	blue: "\x1b[34m",
-	magenta: "\x1b[35m",
-	cyan: "\x1b[36m",
-	white: "\x1b[37m",
-	BgRed: "\x1b[41m",
-	BgGreen: "\x1b[42m",
-	BgYellow: "\x1b[43m",
-	BgBlue: "\x1b[44m",
-	BgMagenta: "\x1b[45m",
-	BgCyan: "\x1b[46m"
-};
-
-function calculateAndMoveObunga() {
+function calculateAndMoveDeathScreen() {
   var adjustmentMatrix = [
     -1, 0, 0,
     0, 1, 0,
     0, 0, -1
   ];
 
-  var adjustedRotationMatrix = multiplyOneDimensionedSquareMartices(adjustmentMatrix, rot);
+  var adjustedRotationMatrix = multiplyOneDimMatrices(adjustmentMatrix, rot);
 
   // get the forward direction vector of the camera
   var forwardDirectionVector = adjustedRotationMatrix.slice(6);
@@ -242,12 +457,12 @@ function calculateAndMoveObunga() {
   var billboardPosition = forwardDirectionVector.map(function(value, index){return (value * billboardDistanceFromCamera) + pos[index]});
 
   // set the billboard height so it is even with the height of the bike
-  var billboardHeight = billboardPosition[1] - mx.get_elevation(billboardPosition[0], billboardPosition[2]) - (obungaSize / 1.5);
+  var billboardHeight = billboardPosition[1] - mx.get_elevation(billboardPosition[0], billboardPosition[2]) - (deathScreenProperties.bbsize / 1.5);
 
-  mx.move_billboard(obungaBillboard, billboardPosition[0], billboardHeight, billboardPosition[2]);
+  mx.move_billboard(deathBillboard, billboardPosition[0], billboardHeight, billboardPosition[2]);
 }
 
-function multiplyOneDimensionedSquareMartices(a, b) {
+function multiplyOneDimMatrices(a, b) {
   
   var rowsA = Math.sqrt(a.length);
   var colsB = Math.sqrt(b.length);
@@ -274,208 +489,105 @@ function isInteger(value) {
   return typeof value === 'number' && isFinite(value) && Math.floor(value) === value;
 }
 
-/*
-Initialize sounds for later use.
-*/
-function setUpWeatherSounds() {
+function addWeatherSounds() {
+  // Add rain sounds
+  for (var i = 0; i < rainTypes.length; i++) {
+    addSoundsToArr(rainTypes[i].sounds, rainTypes[i].sounddirs, rainTypes[i].freqs);
+  }
 
-  addSoundsToArr(lightRainSounds, lightRainSoundDirectories, 44100);
-  addSoundsToArr(medRainSounds, medRainSoundDirectories, 44100);
-  addSoundsToArr(heavyRainSounds, heavyRainSoundDirectories, 44100);
-  setRainLoops();
-
-  // Just add the sounds into game, we will change volumes later
-  addSoundsToArr(lightThunderSounds, lightThunderDirectories, 44100);
-  addSoundsToArr(medThunderSounds, medThunderDirectories, 44100);
-  addSoundsToArr(heavyThunderSounds, heavyThunderDirectories, 44100);
-
+  // Add thunder sounds
+  for (var i = 0; i < thunderTypes.length; i++) {
+    addSoundsToArr(thunderTypes[i].sounds, thunderTypes[i].sounddirs, thunderTypes[i].freqs);
+  }
 }
 
-function addSoundsToArr(arr, directory, freq) {
-  // if adding a sound that's not set to this frequency, will cause sound to play incorrectly
+function addSoundsToArr(arr, directory, freqs) {
   for (var i = 0; i < directory.length; i++) {
     arr[i] = mx.add_sound(directory[i]);
-    mx.set_sound_freq(arr[i], freq);
-  }
-}
 
-// set the loops up, the variables above will be used for fade-in-out volumes
-function setRainLoops() {
-  for (var i = 0; i < lightRainSounds.length; i++) mx.set_sound_loop(lightRainSounds[i], 1);
-  for (var i = 0; i < medRainSounds.length; i++) mx.set_sound_loop(medRainSounds[i], 1);
-  for (var i = 0; i < heavyRainSounds.length; i++) mx.set_sound_loop(heavyRainSounds[i], 1);
-}
-
-/* Rain Objects: {
-  rainName: acts as an identifier from the weather type for this rain type
-  vol: maximum volume of the rain sounds
-  texture: the texture of the sequence file of rain
-  size: holds the size for each rain billboard
-  aspect: holds the aspect ratio for each rain billboard
-  maxBillboardHeight: the maximum height of the billboard in feet before the it starts following the camera
-  sounds: the respective rain sounds
-  billboardArr: holds a list of objects that store each billboards [x,y,z] position and alpha
-  billboardIndexMap: an array that maps a billboardArr index to a rain billboard index
-} */
-const lightRain = {
-  rainName: "light-rain",
-  vol: 1,
-  texture: "@" + trackFolderName + "/billboard/rain/light-rain/lightrain.seq",
-  size: 80,
-  aspect: 1,
-  maxBillboardHeight: 80,
-  sounds: lightRainSounds,
-  billboardArr: [],
-  billboardIndexMap: [],
-};
-const mediumRain = {
-  rainName: "med-rain",
-  vol: 2,
-  texture: "@" + trackFolderName + "/billboard/rain/rain/rain.seq",
-  size: 80,
-  aspect: 1,
-  maxBillboardHeight: 80,
-  sounds: medRainSounds,
-  billboardArr: [],
-  billboardIndexMap: [],
-};
-const heavyRain = {
-  rainName: "heavy-rain",
-  vol: 4,
-  texture: "@" + trackFolderName + "/billboard/rain/heavy-rain/heavyrain.seq",
-  size: 80,
-  aspect: 1,
-  maxBillboardHeight: 80,
-  sounds: heavyRainSounds,
-  billboardArr: [],
-  billboardIndexMap: [],
-};
-
-const rainTypes = [
-  lightRain,
-  mediumRain,
-  heavyRain
-];
-
-/* Thunder Objects: {
-  name: acts as an identifier from the weather type for this thunder type
-  sounds: holds the sound indices for the desired thunder type
-  interval: interval between lightning strikes during this type of weather
-} */
-const lightThunder = {
-  name: "light-thunder",
-  sounds: lightThunderSounds,
-  interval: [10,60]
-};
-
-const mediumThunder = {
-  name: "med-thunder",
-  sounds: medThunderSounds,
-  interval: [5,30]
-};
-
-const heavyThunder = {
-  name: "heavy-thunder",
-  sounds: heavyThunderSounds,
-  interval: [0,15]
-};
-
-const thunderTypes = [
-  lightThunder,
-  mediumThunder,
-  heavyThunder
-];
-
-var currentLightningIndex; // Holds the current index of lightning textures
-var lightningSize; // Holds the current lightning billboard size
-var lightningBillboardIndices; // Holds the lightning billboard indices
-
-const lightningTextureDirectory = "@" + trackFolderName + "/billboard/lightning/";
-const lightningTextures = {
-  textureDirectories: [
-    lightningTextureDirectory + "tex1/lightning1.seq",
-    lightningTextureDirectory + "tex1mirrored/lightning1mirrored.seq",
-    lightningTextureDirectory + "tex2/lightning2.seq",
-    lightningTextureDirectory + "tex2mirrored/lightning2mirrored.seq",
-  ],
-  aspects: [1,1,1,1], // aspect ratio for each billboard
-  delays: [3,3,3,3], // delay between frames in 1/128 second units for each animation
-  maxframes: [14,14,15,15], // total frames for each animation
-  sizeRange: [350, 500], // size range for the billboards
-  get textureIDs() { // Holds all texture IDs for custom frame pasting so we can trigger the lightning animations
-    var ids = [];
-    for (var i = 0; i < this.textureDirectories.length; i++) {
-      ids.push(mx.read_texture(this.textureDirectories[i]));
+    if (freqs[i] === undefined) {
+      mx.message(colors.red + "Error: Missing sound frequency value for sound " + directory[i] + colors.normal);
+      continue;
     }
-    return ids;
+
+    mx.set_sound_freq(arr[i], freqs[i]);
   }
-};
+}
 
+function setRainSoundLoops() {
+  for (var i = 0; i < rainTypes.length; i++) {
+    for (var j = 0; j < rainTypes[i].sounds.length; j++) {
+      mx.set_sound_loop(rainTypes[i].sounds[j], 1);
+    }
+  }
+}
 
-lightningBillboardIndices = addLightingBillboards();
-mx.message(colors.cyan + "Lightning Billboard Indices: [" + lightningBillboardIndices.toString() + "]");
-mx.message(colors.cyan + "Lightning Texture IDs: [" + lightningTextures.textureIDs.toString() + "]");
-function addLightingBillboards() {
-  var billboardIndices = [];
-  for (var i = 0; i < lightningTextures.textureDirectories.length; i++) {
-    
-    // find the billboard, if its not found add it
-    var billboardIndex = mx.find_billboard(lightningTextures.textureDirectories[i], 0);
+function addLightningBillboards() {
+  var xoffset = trackInfo.dimensions;
+  var zoffset = 10;
+  const maxTexturesPerRow = Math.floor(Math.sqrt(lightningTextures.length));
+  var texturesInRow = 0;
+
+  for (var i = 0; i < lightningTextures.length; i++) {
+    if (texturesInRow === maxTexturesPerRow) {
+      zoffset += (lightningTextures[i - 1].sizeRange[0] / 1.5);
+      xoffset = trackInfo.dimensions;
+    }
+
+    // find the billboard, if it cannot be found, add it
+    var billboardIndex = mx.find_billboard(lightningTextures[i].texture, 0);
     if (billboardIndex === -1) {
-      billboardIndex = mx.add_billboard(10, 0, 10, lightningTextures.sizeRange[0], lightningTextures.aspects[i], lightningTextures.textureDirectories[i]);
+      billboardIndex = mx.add_billboard(xoffset, 0, zoffset, lightningTextures[i].sizeRange[0], lightningTextures[i].aspect, lightningTextures[i].texture);
+      if (billboardIndex === -1) {
+        mx.message(colors.red + "Error: Could not add lightning billboard: " + lightningTextureDirectory[i].texture + colors.normal);
+        continue;
+      }
+    } else {
+      // if we found the billboard make sure its the correct size and position
+      mx.size_billboard(billboardIndex, lightningTextures[i].sizeRange[0]);
+      mx.move_billboard(billboardIndex, xoffset, 0, zoffset);
     }
 
+    // hide the billboard
     mx.color_billboard(billboardIndex, 1, 1, 1, 0);
 
-    // push to the billboard indices list
-    billboardIndices.push(billboardIndex);
+    // set the billboard index
+    lightningTextures[i].index = billboardIndex;
 
     // if there's excess billboards hide them
-    billboardIndex = mx.find_billboard(lightningTextures.textureDirectories[i], billboardIndex + 1);
+    billboardIndex = mx.find_billboard(lightningTextures[i].texture, billboardIndex + 1);
     while (billboardIndex !== -1) {
       mx.color_billboard(billboardIndex, 1, 1, 1, 0);
-      billboardIndex = mx.find_billboard(lightningTextures.textureDirectories[i], billboardIndex + 1);
+      billboardIndex = mx.find_billboard(lightningTextures[i].texture, billboardIndex + 1);
     }
-  }
 
-  return billboardIndices;
+    xoffset -= (lightningTextures[i].sizeRange[0] / 1.5);
+    texturesInRow++;
+  }
 }
 
-
 function setRainTypeByWeatherType(weatherType) {
-  try {
-    for (var i = 0; i < rainTypes.length; i++) {
-      if (weatherType.includes(rainTypes[i].rainName)) {
-        return rainTypes[i];
-      }
+  for (var i = 0; i < rainTypes.length; i++) {
+    if (weatherType.includes(rainTypes[i].rainName)) {
+      return rainTypes[i];
     }
-  } catch (e) {
-    mx.message(colors.yellow + "Exception Here 3: " + e.toString() + colors.normal);
   }
   
   return undefined;
 }
 
 function checkForRainChange(weatherType, rainType) {
-  try {
-    for (var i = 0; i < rainTypes.length; i++) {
-      // if the weather type includes the rain name and the rain type passed in does not match the rain type return the index
-      if (weatherType.includes(rainTypes[i].rainName) && rainType.rainName !== rainTypes[i].rainName) {
-        return i;
-      }
+  for (var i = 0; i < rainTypes.length; i++) {
+    // if the weather type includes the rain name and the rain type passed in does not match the rain type return the index
+    if (weatherType.includes(rainTypes[i].rainName) && rainType.rainName !== rainTypes[i].rainName) {
+      return i;
     }
-  } catch (e) {
-    mx.message(colors.blue + "Exception Here 4: " + e.toString() + colors.normal);
   }
   return -1;
 }
 
-// Camera Position Array holds position of camera in 3 element array [x,y,z]
-// Camera Rotation Matrix holds rotation of camera in a 3x3 matrix stored as a 9 element array.
-var pos = [], rot = [];
-
+// stores camera location into the pos and rot array variables
 function updateCamPosition() {
-  // stores camera location into the pos and rot array variables
   mx.get_camera_location(pos, rot);
 }
 
@@ -494,16 +606,11 @@ var thunderSoundIndex = 0;
 var delayForAnotherLightning = 0;
 // speed of sound in ft/s
 const SPEED_OF_SOUND = 1117.2;
-const baseThunderVolume = 10;
-
-// multiplied by the size of the map, it's where the lightning can strike outside the map
-// We will allow lightning to happen outside the map at 3x scale
-const mapScalarForLightning = 3;
 
 // Max and Min Coordinates of x and z where lightning can strike, algorithm keeps original center point constant.
-const lightningMapSize = mapScalarForLightning * terrain.dimensions;
-const minCoords = terrain.center - (1/2 * lightningMapSize);
-const maxCoords = terrain.center + (1/2 * lightningMapSize);
+const lightningMapSize = mapScalarForLightning * trackInfo.dimensions;
+const minCoords = trackInfo.center - (1/2 * lightningMapSize);
+const maxCoords = trackInfo.center + (1/2 * lightningMapSize);
 
 // Hold all lightning strike times and the time we got the lightning strike
 var allLightningStrikeTimes = [];
@@ -585,16 +692,13 @@ function doThunderAndLightning(seconds) {
     }
 
     if (timeLightningStrike !== undefined) {
-      mx.message(colors.red + "time of lightning strike: " + timeToString(timeLightningStrike - gateDropTime) + colors.normal);
+      mx.message(colors.cyan + "time of lightning strike: " + timeToString(timeLightningStrike - gateDropTime) + colors.normal);
     }
     gotTimeLightning = (timeLightningStrike === undefined) ? false : true;
   }
 
   // If we are behind the delay for another lightning and we have already gotten a time we're going back in a demo prior to a strike
   if (seconds < allTimesGotLightningStrikes[allTimesGotLightningStrikes.length - 1] && gotTimeLightning && seconds < lastThunderUpdateTime) {
-
-    mx.message("last time got lightning strike: " + timeToString(allTimesGotLightningStrikes[allTimesGotLightningStrikes.length - 1] - gateDropTime));
-    
     // stop the lightning animation if we have one
     if (lightningAnimationHappening === true) {
       stopLightningAnimation(currentLightningIndex);
@@ -659,10 +763,11 @@ function doThunderAndLightning(seconds) {
       gotTimeLightning = false;
       resetGoodbyeList = false;
 
-      rand = mulberry32SeedFromInterval(timeLightningStrike, 60, 360);
+      rand = mulberry32SeedFromInterval(timeLightningStrike, 120, 360);
       timeToSmite = rand() + timeLightningStrike;
       goodbyeTimes[indexToSmite] = timeLightningStrike + 0.1; // add 0.1 second delay for them to contemplate
-      // if player slot is the slot to smite, goodbye ears
+      
+      // if player slot is the slot to smite, send my regards
       if (clientSlot == smiteList[indexToSmite].slot) {
         godHaveMercyOnYourSoul(slotCoords);
       }
@@ -688,9 +793,9 @@ function doThunderAndLightning(seconds) {
   if (thunderPending) {
 
     if (indexToSmite > -1) {
-      // if it's less than goodbye time move obunga
+      // if it's less than goodbye time move death screen
       if (canSmite && seconds < goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
-        calculateAndMoveObunga();
+        calculateAndMoveDeathScreen();
       }
       
       // goodbye
@@ -735,7 +840,7 @@ function doThunderAndLightning(seconds) {
     var distance = getDistance3D(pos[0], pos[1], pos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
 
     // if the thunder has reacher the player
-    if (distance - distanceTraveled <= 0) {
+    if (distance <= distanceTraveled) {
       // time it took for the thunder to reach the rider from the lightning origin
       var time = seconds - timeLightningStrike;
       var vol = Math.ceil(baseThunderVolume / (0.25 * time));
@@ -744,7 +849,7 @@ function doThunderAndLightning(seconds) {
 
       // if it takes less than 1.5 seconds to reach play a heavy thunder sound
       currentThunder = (time < 1.25) ? heavyThunder : (time < 2.5) ? mediumThunder : lightThunder;
-      playThunderSound(currentThunder.sounds, vol, seconds);
+      thunderSoundIndex = playThunderSound(currentThunder.sounds, vol, seconds);
       thunderPending = false;
     }
   }
@@ -754,7 +859,6 @@ function doThunderAndLightning(seconds) {
 
   lightningAnimation(seconds, currentLightningIndex);
   lastThunderUpdateTime = seconds;
-  
 }
 
 function checkAvailableSmiteTabOut(seconds) {
@@ -773,7 +877,7 @@ function checkAvailableSmiteTabOut(seconds) {
     // get coords of slot to smite
     var slotCoords = mx.get_position(smiteList[indexToSmite].slot);
     resetGoodbyeList = false;
-    rand = mulberry32SeedFromInterval(timeLightningStrike, 60, 360);
+    rand = mulberry32SeedFromInterval(timeLightningStrike, 120, 360);
     timeToSmite = rand() + timeLightningStrike; // reset the next time to smite
     goodbyeTimes[indexToSmite] = timeLightningStrike + 0.1; // add 0.1 second delay for game to catch up
     // if player slot is the slot to smite, goodbye ears
@@ -783,9 +887,9 @@ function checkAvailableSmiteTabOut(seconds) {
   }
 
   if (indexToSmite > -1) {
-    // if it's less than goodbye time move obunga
+    // if it's less than goodbye time move death screen
     if (canSmite && seconds < goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
-      calculateAndMoveObunga();
+      calculateAndMoveDeathScreen();
     }
     // goodbye
     if (canSmite && seconds >= goodbyeTimes[indexToSmite] && clientSlot == smiteList[indexToSmite].slot) {
@@ -828,64 +932,63 @@ var lightningAnimationProperties = {
   x: 0,
   y: 0,
   z: 0,
-  size: lightningTextures.sizeRange[0]
+  size: 0
 }
 
 function lightningAnimation(seconds, currentTextureIndex) {
 
-  var lightingTextureID = lightningTextures.textureIDs[currentTextureIndex];
-  var lightningTextureMaxFrames = lightningTextures.maxframes[currentTextureIndex];
-  var lightningFrameDelay = lightningTextures.delays[currentTextureIndex];
+  if (!lightningAnimationHappening) return;
 
-  if (lightningAnimationHappening) {
+  var lightingTextureID = lightningTextures[currentTextureIndex].textureID;
+  var lightningTextureMaxFrames = lightningTextures[currentTextureIndex].framecount;
+  var lightningFrameDelay = lightningTextures[currentTextureIndex].delay;
 
-    // if we go backwards in the demo and we are before the trigger of the lightning we want to hide it
-    if (seconds < timeStartedLightningAnimation) {
-      stopLightningAnimation(currentTextureIndex);
-      return;
-    }
-  
-    if (seconds - lastLightningAnimationUpdate < lightningFrameDelay / mx.tics_per_second && seconds >= lastLightningAnimationUpdate) return;
-
-    // if the animation coordinates do not equal the lightning strike coordinates move it
-    if (lightningAnimationProperties.x != lightningCoords.x || lightningAnimationProperties.y != lightningCoords.y || lightningAnimationProperties.z != lightningCoords.z) {
-      lightningAnimationProperties.x = lightningCoords.x;
-      lightningAnimationProperties.y = lightningCoords.y;
-      lightningAnimationProperties.z = lightningCoords.z;
-
-      var billboardIndex = lightningBillboardIndices[currentTextureIndex];
-      mx.move_billboard(billboardIndex, lightningAnimationProperties.x, lightningAnimationProperties.y, lightningAnimationProperties.z);
-    }
-
-    // if the animation size does not equal the lightning size set it
-    if (lightningAnimationProperties.size != lightningSize) {
-      lightningAnimationProperties.size = lightningSize;
-
-      var billboardIndex = lightningBillboardIndices[currentTextureIndex];
-      mx.size_billboard(billboardIndex, lightningAnimationProperties.size);
-    }
-
-    if (lightningHidden) {
-      toggleLightningTexture(currentTextureIndex, 1);
-    }
-
-    lastLightningAnimationUpdate = seconds;
-
-    currentLightningFrame = Math.round((seconds - timeStartedLightningAnimation) / (lightningFrameDelay / mx.tics_per_second));
-
-    if (currentLightningFrame >= lightningTextureMaxFrames) {
-      stopLightningAnimation(currentTextureIndex);
-      return;
-    }
-
-    mx.begin_custom_frame(lightingTextureID);
-    mx.paste_custom_frame(lightingTextureID, currentLightningFrame, 0, 0, 0, 0, 1, 1);
-    mx.end_custom_frame(lightingTextureID);
+  // if we go backwards in the demo and we are before the trigger of the lightning we want to hide it
+  if (seconds < timeStartedLightningAnimation) {
+    stopLightningAnimation(currentTextureIndex);
+    return;
   }
+  
+  if (seconds - lastLightningAnimationUpdate < lightningFrameDelay / mx.tics_per_second && seconds >= lastLightningAnimationUpdate) return;
+
+  // if the animation coordinates do not equal the lightning strike coordinates move it
+  if (lightningAnimationProperties.x != lightningCoords.x || lightningAnimationProperties.y != lightningCoords.y || lightningAnimationProperties.z != lightningCoords.z) {
+    lightningAnimationProperties.x = lightningCoords.x;
+    lightningAnimationProperties.y = lightningCoords.y;
+    lightningAnimationProperties.z = lightningCoords.z;
+
+    var billboardIndex = lightningTextures[currentTextureIndex].index;
+    mx.move_billboard(billboardIndex, lightningAnimationProperties.x, lightningAnimationProperties.y, lightningAnimationProperties.z);
+  }
+
+  // if the animation size does not equal the lightning size set it
+  if (lightningAnimationProperties.size != lightningSize) {
+    lightningAnimationProperties.size = lightningSize;
+
+    var billboardIndex = lightningTextures[currentTextureIndex].index;
+    mx.size_billboard(billboardIndex, lightningAnimationProperties.size);
+  }
+
+  if (lightningHidden) {
+    toggleLightningTexture(currentTextureIndex, 1);
+  }
+
+  lastLightningAnimationUpdate = seconds;
+
+  currentLightningFrame = Math.round((seconds - timeStartedLightningAnimation) / (lightningFrameDelay / mx.tics_per_second));
+
+  if (currentLightningFrame >= lightningTextureMaxFrames) {
+    stopLightningAnimation(currentTextureIndex);
+    return;
+  }
+
+  mx.begin_custom_frame(lightingTextureID);
+  mx.paste_custom_frame(lightingTextureID, currentLightningFrame, 0, 0, 0, 0, 1, 1);
+  mx.end_custom_frame(lightingTextureID);
 }
 
 function toggleLightningTexture(textureIndex, value) {
-  var billboardIndex = lightningBillboardIndices[textureIndex];
+  var billboardIndex = lightningTextures[textureIndex].index;
   mx.color_billboard(billboardIndex, 1, 1, 1, value);
 
   lightningHidden = false;
@@ -947,7 +1050,7 @@ function catchUpLightningStrikes(seconds) {
       return;
     }
 
-    //checkAvailableSmiteTabOut(seconds);
+    checkAvailableSmiteTabOut(seconds);
     
     currentWeatherType = getWeatherType(timeLightningStrike);
     
@@ -966,8 +1069,6 @@ function catchUpLightningStrikes(seconds) {
       
       // if the next lightning strike we switch weather types then break out of this loop
       if (!doesWeatherHaveThunder(nextLightningStrikeWeather, timeLightningStrike + maxTimeOfThunderPending, false)) {
-        mx.message(colors.red + "BREAK" + colors.normal);
-        mx.message("");
         break;
       }
       
@@ -1015,7 +1116,7 @@ function catchUpLightningStrikes(seconds) {
           return;
         }
 
-        //checkAvailableSmiteTabOut(seconds);
+        checkAvailableSmiteTabOut(seconds);
         
         // get the weather type at the current lightning strike
         currentWeatherType = getWeatherType(timeLightningStrike);
@@ -1039,8 +1140,6 @@ function catchUpLightningStrikes(seconds) {
           
           // if the next lightning strike we switch weather types then break out of this loop
           if (!doesWeatherHaveThunder(nextLightningStrikeWeather, timeLightningStrike + maxTimeOfThunderPending, false)) {
-            mx.message(colors.red + "BREAK" + colors.normal);
-            mx.message("");
             break;
           }
           
@@ -1123,7 +1222,7 @@ function doesWeatherHaveThunder(weatherType, seconds, removeLightningStrike) {
       return false;
     }
   } catch (e) {
-    mx.message(colors.magenta + "Exception Here 5: " + e.toString() + colors.normal);
+    mx.message(colors.magenta + "Exception Here 1: " + e.toString() + colors.normal);
   }
   
   return true;
@@ -1132,10 +1231,10 @@ function doesWeatherHaveThunder(weatherType, seconds, removeLightningStrike) {
 function getLightningStrikeIntervals(weatherType) {
   try {
     for (var i = 0; i < thunderTypes.length; i++) {
-      if (weatherType.includes(thunderTypes[i].name)) return thunderTypes[i].interval;
+      if (weatherType.includes(thunderTypes[i].thunderName)) return thunderTypes[i].interval;
     }
   } catch (e) {
-    mx.message(colors.cyan + "Exception Here 6: " + e.toString() + colors.normal);
+    mx.message(colors.cyan + "Exception Here 2: " + e.toString() + colors.normal);
   }
 
   return undefined;
@@ -1143,10 +1242,10 @@ function getLightningStrikeIntervals(weatherType) {
 
 function setLightningStrikeCoords(lightningStrikeTime) {
   // set the lightning texture index
-  var rand = mulberry32SeedFromInterval(lightningStrikeTime * 123, 0, lightningTextures.textureDirectories.length - 1);
+  var rand = mulberry32SeedFromInterval(lightningStrikeTime * 123, 0, lightningTextures.length - 1);
   currentLightningIndex = Math.floor(rand());
 
-  rand = mulberry32SeedFromInterval(lightningStrikeTime * 321, lightningTextures.sizeRange[0], lightningTextures.sizeRange[1]);
+  rand = mulberry32SeedFromInterval(lightningStrikeTime * 321, lightningTextures[currentLightningIndex].sizeRange[0], lightningTextures[currentLightningIndex].sizeRange[1]);
   lightningSize = +rand().toFixed(6); // use plus sign to implicitly change the .toFixed() return string back into a number
 
   rand = mulberry32SeedFromInterval(lightningStrikeTime * 100, minCoords, maxCoords);
@@ -1156,7 +1255,7 @@ function setLightningStrikeCoords(lightningStrikeTime) {
   lightningCoords.z = +rand().toFixed(6);
 
   // check if the lightning strike happens inside the map
-  var lightningInsideMap = (lightningCoords.x >= 0 && lightningCoords.z >= 0 && lightningCoords.x <= terrain.dimensions && lightningCoords.z <= terrain.dimensions) ? true : false;
+  var lightningInsideMap = (lightningCoords.x >= 0 && lightningCoords.z >= 0 && lightningCoords.x <= trackInfo.dimensions && lightningCoords.z <= trackInfo.dimensions) ? true : false;
 
   if (lightningInsideMap === false) {
     lightningSize *= 2.5;
@@ -1175,10 +1274,11 @@ function setLightningStrikeCoords(lightningStrikeTime) {
 
 function playThunderSound(arr, vol, seconds) {
   var rand = mulberry32SeedFromInterval(seconds * 12345, 0, arr.length - 1);
-  thunderSoundIndex = Math.floor(rand());
-  mx.set_sound_pos(arr[thunderSoundIndex], pos[0], pos[1], pos[2]);
-  mx.set_sound_vol(arr[thunderSoundIndex], vol);
-  mx.start_sound(arr[thunderSoundIndex]);
+  var currentIndex = Math.floor(rand());
+  mx.set_sound_pos(arr[currentIndex], pos[0], pos[1], pos[2]);
+  mx.set_sound_vol(arr[currentIndex], vol);
+  mx.start_sound(arr[currentIndex]);
+  return currentIndex;
 }
 
 var weatherTypeIndex = -1;
@@ -1191,7 +1291,7 @@ var timesWeatherStarted = [];
 var iterationThroughWeatherIndices = 0;
 var timeWeatherStarted = 0;
 var initializedWeatherForSession = false;
-const minWeatherTypes = 15;
+
 /* Weather should be the same for every client, but different for each session, so we will use the players slot numbers from the running order,
     which changes at the beginning of each session, but is a constant for all players as the basis for creating what weather types to choose */
 function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
@@ -1302,20 +1402,15 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       }
       prevWeather = weatherTypesArr[weatherIndicesForSession[prevWeatherIndex]];
       // if the next weather is not thunder and the previous weather cycle did have thunder increment the current lightning cycle
-      try {
-        if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
-          // only add the total if this lightning cycle is undefined
-          if (totalLightningStrikesInCycle[currentLightningCycle] === undefined) {
-            totalLightningStrikesInCycle.push(lightningStrikesThisThunderCycle);
-          }
-          // reset the lightning strikes for this thunder cycle
-          lightningStrikesThisThunderCycle = 0;
-          currentLightningCycle++;
-          // mx.message("current lightning cycle: " + currentLightningCycle.toString());
+      if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
+        // only add the total if this lightning cycle is undefined
+        if (totalLightningStrikesInCycle[currentLightningCycle] === undefined) {
+          totalLightningStrikesInCycle.push(lightningStrikesThisThunderCycle);
         }
-      } catch (e) {
-        mx.message(colors.red + "Exception Here 1: " + e.toString() + colors.normal);
-        mx.message(colors.red + "Prev Weather Index: " + weatherTypeIndex.toString() + " | Current Weather Index: " + currentWeatherIndex.toString() + colors.normal);
+        // reset the lightning strikes for this thunder cycle
+        lightningStrikesThisThunderCycle = 0;
+        currentLightningCycle++;
+        // mx.message("current lightning cycle: " + currentLightningCycle.toString());
       }
     }
   }
@@ -1358,25 +1453,19 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       }
       var currentWeather = weatherTypesArr[weatherIndicesForSession[currentWeatherIndex]];
 
-      try {
-        // if the previous weather has thunder and the current does not then do work
-        if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
-          // decrement the current lightning cycle and pop the last element of total lightning strikes in cycle
-          currentLightningCycle--;
-        
-          // get the total lightning strikes in the previous cycle then remove it from the array
-          lightningStrikesThisThunderCycle = totalLightningStrikesInCycle[currentLightningCycle];
-        
-          // get the previous time of lightning strike, reset the delay for another lighting, and set got time of lightning to true
-          timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
-          delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
-          // mx.message("current lightning cycle: " + currentLightningCycle.toString());
-        }
-      } catch (e) {
-        mx.message(colors.green + "Exception Here 2: " + e.toString() + colors.normal);
-        mx.message(colors.green + "Prev Weather Index: " + weatherTypeIndex.toString() + " | Current Weather Index: " + currentWeatherIndex.toString() + colors.normal);
-      }
+      // if the previous weather has thunder and the current does not then do work
+      if (prevWeather.includes("thunder") && !currentWeather.includes("thunder")) {
+        // decrement the current lightning cycle and pop the last element of total lightning strikes in cycle
+        currentLightningCycle--;
       
+        // get the total lightning strikes in the previous cycle then remove it from the array
+        lightningStrikesThisThunderCycle = totalLightningStrikesInCycle[currentLightningCycle];
+      
+        // get the previous time of lightning strike, reset the delay for another lighting, and set got time of lightning to true
+        timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
+        delayForAnotherLightning = timeLightningStrike + maxTimeOfThunderPending;
+        // mx.message("current lightning cycle: " + currentLightningCycle.toString());
+      }
     }
 
     durationOfWeatherType = weatherDurations[index];
@@ -1413,14 +1502,13 @@ var prevRainSoundIndex;
 // FADE IN VARIABLES
 var rainCurrentFadeInVolume = 0;
 var rainTargetFadeInVolume;
-const rainFadeInTime = 15; // in seconds
+
 var rainFadeInVolPerSec;
 
 // FADE OUT VARIABLES
 var rainCurrentFadeOutVolume;
 var rainStartFadeOutVolume;
 // ## Target Fade Out is Constant 0 ##
-const rainFadeOutTime = 15; // in seconds
 var rainFadeOutVolPerSec;
 
 // Hold the time at which we start a fade
@@ -1675,19 +1763,15 @@ function moveRainPosition(type, index) {
   mx.set_sound_pos(type.sounds[index], pos[0], pos[1], pos[2]);
 }
 
-const grid = {
-  size: 45, // How many feet between grid points
-  count: 9, // How many grid points along each edge
-  get area() {return this.count * this.count;}
-};
-
 // add rain billboards then hide each billboard
 addRainBillboards();
 hideAllRainBillboards(undefined);
 
 function addRainBillboards() {
   
+  var zoffset = 10;
   for (var i = 0; i < rainTypes.length; i++) {
+    var xoffset = 0;
     var numberBillboards = 0;
     var lastBillboardIndex = -1;
     var rainType = rainTypes[i];
@@ -1697,18 +1781,40 @@ function addRainBillboards() {
       // find the last billboard index that matches the texture
       lastBillboardIndex = mx.find_billboard(rainType.texture, lastBillboardIndex + 1);
       
+      // reset x offset and increment the z offset
+      if (xoffset === rainType.gridsize * rainType.gridcount) {
+        xoffset = 0;
+        zoffset += rainType.gridsize;
+      }
+
       // if we couldn't find one add it
       if (lastBillboardIndex === -1) {
-        lastBillboardIndex = mx.add_billboard(0, 0, 0, rainType.size, rainType.aspect, rainType.texture);
-      } else { // otherwise resize the one we found to make sure it's the correct size
+        lastBillboardIndex = mx.add_billboard(xoffset, 0, zoffset, rainType.size, rainType.aspect, rainType.texture);
+        if (lastBillboardIndex === -1) {
+          mx.message(colors.red + "Error: Could not add billboard: " + rainType.texture + colors.normal);
+          break;
+        }
+      } else { // otherwise resize the one we found to make sure it's the correct size and move it
         mx.size_billboard(lastBillboardIndex, rainType.size);
+        mx.move_billboard(lastBillboardIndex, xoffset, 0, zoffset);
       }
       numberBillboards++;
 
       // add the billboard index to the billboard index map
       rainType.billboardIndexMap.push(lastBillboardIndex);
 
-    } while (numberBillboards < grid.area);
+      // add billboard object that store location and alpha properties of this billboard
+      rainType.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});
+
+      // increase the offset
+      xoffset += rainType.gridsize;
+
+    } while (numberBillboards < rainType.gridarea);
+
+    // if we exited the loop before we could add enough billboards go to next iteration
+    if (numberBillboards < rainType.gridarea) {
+      continue;
+    }
 
     mx.message(colors.green + rainType.rainName + " billboard Map: " + rainType.billboardIndexMap.toString() + colors.normal);
 
@@ -1718,10 +1824,7 @@ function addRainBillboards() {
       mx.color_billboard(lastBillboardIndex, 1, 1, 1, 0);
     } while (lastBillboardIndex !== -1);
 
-    // add billboard objects that store location and alpha properties for each rain billboard
-    for (var j = 0; j < grid.area; j++) {
-      rainType.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});
-    }
+    zoffset += rainType.gridsize * 1.5;
   }
 }
 
@@ -1736,20 +1839,20 @@ function isBillboardInNoRainSpot(x, z) {
 }
 
 function moveRainBillboards(rainType, alphaStart) {
-  for (var z = 0; z < grid.count; z++) {
-  	for (var x = 0; x < grid.count; x++) {
+  for (var z = 0; z < rainType.gridcount; z++) {
+  	for (var x = 0; x < rainType.gridcount; x++) {
       var camx = pos[0], camy = pos[1], camz = pos[2];
-  		var billboard_x = Math.floor((camx / grid.size) - (grid.count / 2.0) + 0.5 + x) * grid.size;
-  		var billboard_z = Math.floor((camz / grid.size) - (grid.count / 2.0) + 0.5 + z) * grid.size;
+  		var billboard_x = Math.floor((camx / rainType.gridsize) - (rainType.gridcount / 2.0) + 0.5 + x) * rainType.gridsize;
+  		var billboard_z = Math.floor((camz / rainType.gridsize) - (rainType.gridcount / 2.0) + 0.5 + z) * rainType.gridsize;
 
       // probably a good idea to fade out to hide popping
   		var dx = billboard_x - camx;
   		var dz = billboard_z - camz;
-  		var alpha = alphaStart - (Math.sqrt(dx * dx + dz * dz) / (grid.size * grid.count / 2));
+  		var alpha = alphaStart - (Math.sqrt(dx * dx + dz * dz) / (rainType.gridsize * rainType.gridcount / 2));
       if (alpha > 1) alpha = 1;
       if (alpha < 0) alpha = 0;
 
-      var index = x + z * grid.count;
+      var index = x + z * rainType.gridcount;
       var billboardIndex = rainType.billboardIndexMap[index];
       
       // Change the alpha of the rain billboards if we have a new alpha level
@@ -1828,7 +1931,7 @@ function getGateDropTime(seconds) {
     gateDropped = true;
     fillSmiteList();
     if (smiteList.length == 0) canSmite = false;
-    var rand = mulberry32SeedFromInterval((gateDropTime * 1000) >> 3, 10, 20);
+    var rand = mulberry32SeedFromInterval((gateDropTime * 1000) >> 3, 120, 360);
     timeToSmite = rand() + gateDropTime;
   }
 }

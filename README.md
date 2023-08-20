@@ -1,6 +1,7 @@
 # Sim Weather
 MX Simulator Interactive Rain Weather Project
 
+The MX Simulator script file (frills.js) is only Javascript ES5 compatible, so the following project is coded with Javascript ES5 functionality.
 <br>
 
 # General Info
