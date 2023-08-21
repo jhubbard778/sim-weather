@@ -3,7 +3,7 @@
   Track Info
 --------------
 The trackInfo object is an object that holds the following properties:
-  folderName: the folder name of the current track
+  folderDir: the folder name of the current track with an @ symbol before to direct the API to the correct folder
   terrain_size: the terrain.png dimensions
   terrain_scale: the scale specified in the terrain.hf file
   dimensions: holds the track map dimensions by calculating the terrain size times the terrain scale
@@ -11,7 +11,7 @@ The trackInfo object is an object that holds the following properties:
 */
 
 const trackInfo = {
-  folderName: "tracktitanwet",
+  folderDir: "@tracktitanwet",
   terrain_size: 2049,
   terrain_scale: 1,
   get dimensions() {return (this.terrain_size - 1) * this.terrain_scale;},
@@ -47,50 +47,50 @@ Each rain/lightning sound type will have:
 */
 
 const lightRainSoundDirectories = [
-  "@" + trackInfo.folderName + "/sounds/weather/rain/lightrain.raw"
+  trackInfo.folderDir + "/sounds/weather/rain/lightrain.raw"
 ];
 const lightRainSoundFreqs = [44100];
 
 const medRainSoundDirectories = [
-  "@" + trackInfo.folderName + "/sounds/weather/rain/rain.raw"
+  trackInfo.folderDir + "/sounds/weather/rain/rain.raw"
 ];
 const medRainSoundFreqs = [44100];
 
 const heavyRainSoundDirectories = [
-  "@" + trackInfo.folderName + "/sounds/weather/rain/heavyrain.raw"
+  trackInfo.folderDir + "/sounds/weather/rain/heavyrain.raw"
 ];
 const heavyRainSoundFreqs = [44100];
 
 // Distant ambient thunder sounds
 const lightThunderDirectories = [
-  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder1.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder2.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder3.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder4.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/distant-thunder/distant-thunder5.raw",
+  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder1.raw",
+  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder2.raw",
+  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder3.raw",
+  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder4.raw",
+  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder5.raw",
 ];
 const lightThunderSoundFreqs = [44100,44100,44100,44100,44100];
 
 // Basic thunder sounds
 const medThunderDirectories = [
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder1.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder2.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder3.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder4.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder5.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder6.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder7.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/thunder/thunder8.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder1.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder2.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder3.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder4.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder5.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder6.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder7.raw",
+  trackInfo.folderDir + "/sounds/weather/thunder/thunder8.raw",
 ];
 const medThunderSoundFreqs = [44100,44100,44100,44100,44100,44100,44100,44100];
 
 // Heavy thunder sounds
 const heavyThunderDirectories = [
-  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder1.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
-  "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/heavy-thunder5.raw",
+  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder1.raw",
+  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
+  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
+  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
+  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder5.raw",
 ];
 const heavyThunderSoundFreqs = [44100,44100,44100,44100,44100];
 
@@ -108,8 +108,7 @@ Each rain type will have an object with the following propeties:
   sounds: the respective rain sounds (leave empty)
   sounddirs: the sound directories for the desired rain type
   freqs: the sound frequencies for the desired rain type
-  billboardArr: holds a list of objects that store each billboards [x,y,z] position and alpha
-  billboardIndexMap: an array that maps a billboardArr index to a rain billboard index
+  billboardArr: holds a list of objects that store each billboards [x,y,z] position, alpha, and billboard index
   gridsize: how many feet are in between each grid point (feet between each rain billboard)
   gridcount: how many grid points along each edge (how many rain billboards)
   gridarea: the total count of grid points (total rain billboard count)
@@ -126,15 +125,14 @@ function RainType(rainName, vol, texture, size, aspect, maxBillboardHeight, soun
   this.sounddirs = sounddirs;
   this.freqs = freqs;
   this.billboardArr = [];
-  this.billboardIndexMap = [];
   this.gridsize = gridsize;
   this.gridcount = gridcount;
   this.gridarea = gridcount * gridcount;
 }
 
-const lightRain = new RainType("light-rain", 1, "@" + trackInfo.folderName + "/billboard/rain/light-rain/lightrain.seq", 80, 1, 80, lightRainSoundDirectories, lightRainSoundFreqs, 45, 9);
-const mediumRain = new RainType("med-rain", 2, "@" + trackInfo.folderName + "/billboard/rain/med-rain/medrain.seq", 80, 1, 80, medRainSoundDirectories, medRainSoundFreqs, 45, 9);
-const heavyRain = new RainType("heavy-rain", 4, "@" + trackInfo.folderName + "/billboard/rain/heavy-rain/heavyrain.seq", 80, 1, 80, heavyRainSoundDirectories, heavyRainSoundFreqs, 45, 9);
+var lightRain = new RainType("light-rain", 1, trackInfo.folderDir + "/billboard/rain/light-rain/lightrain.seq", 80, 1, 80, lightRainSoundDirectories, lightRainSoundFreqs, 45, 9);
+var mediumRain = new RainType("med-rain", 2, trackInfo.folderDir + "/billboard/rain/med-rain/medrain.seq", 80, 1, 80, medRainSoundDirectories, medRainSoundFreqs, 45, 9);
+var heavyRain = new RainType("heavy-rain", 4, trackInfo.folderDir + "/billboard/rain/heavy-rain/heavyrain.seq", 80, 1, 80, heavyRainSoundDirectories, heavyRainSoundFreqs, 45, 9);
 
 const rainTypes = [
   lightRain,
@@ -148,10 +146,10 @@ const rainTypes = [
 -----------------
 Each thunder type will have an object with the following properties:
   name: acts as an identifier for the weather type to point to this thunder type
-  sounds: the sound indices for the desired thunder type
-  sounddirs: the sound directories for the desired thunder type
-  freqs: the sound frequencies for the desired thunder type
-  interval: interval between lightning strikes during this type of weather
+  sounds: an array of sound indices for the desired thunder type
+  sounddirs: an array of sound directories for the desired thunder type
+  freqs: an array of sound frequencies for the desired thunder type
+  interval: a 2 element array of intervals between lightning strikes in seconds during this thunder type 
 */
 
 function ThunderType(thunderName, sounddirs, freqs, interval) {
@@ -162,9 +160,9 @@ function ThunderType(thunderName, sounddirs, freqs, interval) {
   this.interval = interval;
 }
 
-const lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60]);
-const mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30]);
-const heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15]);
+var lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60]);
+var mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30]);
+var heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15]);
 
 const thunderTypes = [
   lightThunder,
@@ -173,12 +171,11 @@ const thunderTypes = [
 ];
 
 addWeatherSounds();
-setRainSoundLoops();
 
 var currentLightningIndex; // Holds the current index of the lightning texture we will be using
 var lightningSize; // Holds the current lightning billboard size
 var lightningBillboardIndices; // Holds the lightning billboard indices
-const lightningTextureDirectory = "@" + trackInfo.folderName + "/billboard/lightning/"; // the base lightning directory
+const lightningTextureDirectory = trackInfo.folderDir + "/billboard/lightning/"; // the base lightning directory
 
 /* 
 ---------------------
@@ -204,10 +201,10 @@ function LightningTexture(textureDirectory, aspect, delay, framecount, sizeRange
   this.index = undefined;
 }
 
-const lightningTexture1 = new LightningTexture(lightningTextureDirectory + "tex1/lightning1.seq", 1, 3, 14, [350, 500]);
-const lightningTexture1Mirrored = new LightningTexture(lightningTextureDirectory + "tex1mirrored/lightning1mirrored.seq", 1, 3, 14, [350, 500]);
-const lightningTexture2 = new LightningTexture(lightningTextureDirectory + "tex2/lightning2.seq", 1, 3, 15, [350, 500]);
-const lightningTexture2Mirrored = new LightningTexture(lightningTextureDirectory + "tex2mirrored/lightning2mirrored.seq", 1, 3, 15, [350, 500]);
+var lightningTexture1 = new LightningTexture(lightningTextureDirectory + "tex1/lightning1.seq", 1, 3, 14, [350, 500]);
+var lightningTexture1Mirrored = new LightningTexture(lightningTextureDirectory + "tex1mirrored/lightning1mirrored.seq", 1, 3, 14, [350, 500]);
+var lightningTexture2 = new LightningTexture(lightningTextureDirectory + "tex2/lightning2.seq", 1, 3, 15, [350, 500]);
+var lightningTexture2Mirrored = new LightningTexture(lightningTextureDirectory + "tex2mirrored/lightning2mirrored.seq", 1, 3, 15, [350, 500]);
 
 const lightningTextures = [
   lightningTexture1,
@@ -289,9 +286,9 @@ to a client should they be struck by lightning. The properties include:
 */
 const deathScreenProperties = {
   bbsize: 7,
-  bbtexture: "@" + trackInfo.folderName + "/billboard/rain/donotworry/obunga.png",
+  bbtexture: trackInfo.folderDir + "/billboard/rain/donotworry/obunga.png",
   bbaspect: 1,
-  sounddir: "@" + trackInfo.folderName + "/sounds/weather/heavy-thunder/ears.raw",
+  sounddir: trackInfo.folderDir + "/sounds/weather/heavy-thunder/ears.raw",
   soundfreq: 44100,
   soundvol: 10
 }
@@ -493,6 +490,11 @@ function addWeatherSounds() {
   // Add rain sounds
   for (var i = 0; i < rainTypes.length; i++) {
     addSoundsToArr(rainTypes[i].sounds, rainTypes[i].sounddirs, rainTypes[i].freqs);
+    
+    // set rain sounds to loop
+    for (var j = 0; j < rainTypes[i].sounds.length; j++) {
+      mx.set_sound_loop(rainTypes[i].sounds[j], 1);
+    }
   }
 
   // Add thunder sounds
@@ -511,14 +513,6 @@ function addSoundsToArr(arr, directory, freqs) {
     }
 
     mx.set_sound_freq(arr[i], freqs[i]);
-  }
-}
-
-function setRainSoundLoops() {
-  for (var i = 0; i < rainTypes.length; i++) {
-    for (var j = 0; j < rainTypes[i].sounds.length; j++) {
-      mx.set_sound_loop(rainTypes[i].sounds[j], 1);
-    }
   }
 }
 
@@ -1800,11 +1794,8 @@ function addRainBillboards() {
       }
       numberBillboards++;
 
-      // add the billboard index to the billboard index map
-      rainType.billboardIndexMap.push(lastBillboardIndex);
-
-      // add billboard object that store location and alpha properties of this billboard
-      rainType.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1});
+      // add billboard object that store location, alpha, and index properties of this billboard
+      rainType.billboardArr.push({x: -1, y: -1, z: -1, alpha: -1, index: lastBillboardIndex});
 
       // increase the offset
       xoffset += rainType.gridsize;
@@ -1816,7 +1807,13 @@ function addRainBillboards() {
       continue;
     }
 
-    mx.message(colors.green + rainType.rainName + " billboard Map: " + rainType.billboardIndexMap.toString() + colors.normal);
+    var billboardIndicesString = colors.green + rainType.rainName + " Billboard Map [";
+    for (var j = 0; j < rainType.billboardArr.length; j++) {
+      billboardIndicesString += rainType.billboardArr[j].index.toString() + ',';
+    }
+    billboardIndicesString += "]" + colors.normal;
+
+    mx.message(billboardIndicesString);
 
     // hide any excess billboards
     do {
@@ -1853,7 +1850,7 @@ function moveRainBillboards(rainType, alphaStart) {
       if (alpha < 0) alpha = 0;
 
       var index = x + z * rainType.gridcount;
-      var billboardIndex = rainType.billboardIndexMap[index];
+      var billboardIndex = rainType.billboardArr[index].index;
       
       // Change the alpha of the rain billboards if we have a new alpha level
       if (rainType.billboardArr[index].alpha != alpha) {
@@ -1917,8 +1914,8 @@ function moveRainBillboards(rainType, alphaStart) {
 }
 
 function hideRainBillboards(rainType) {
-  for (var i = 0; i < rainType.billboardIndexMap.length; i++) {
-    mx.color_billboard(rainType.billboardIndexMap[i], 1, 1, 1, 0);
+  for (var i = 0; i < rainType.billboardArr.length; i++) {
+    mx.color_billboard(rainType.billboardArr[i].index, 1, 1, 1, 0);
   }
 }
 
