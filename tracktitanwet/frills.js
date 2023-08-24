@@ -52,7 +52,7 @@ const lightRainSoundDirectories = [
 const lightRainSoundFreqs = [44100];
 
 const medRainSoundDirectories = [
-  trackInfo.folderDir + "/sounds/weather/rain/rain.raw"
+  trackInfo.folderDir + "/sounds/weather/rain/medrain.raw"
 ];
 const medRainSoundFreqs = [44100];
 
@@ -67,20 +67,19 @@ const lightThunderDirectories = [
   trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder2.raw",
   trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder3.raw",
   trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder4.raw",
-  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder5.raw",
 ];
 const lightThunderSoundFreqs = [44100,44100,44100,44100,44100];
 
 // Basic thunder sounds
 const medThunderDirectories = [
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder1.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder2.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder3.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder4.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder5.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder6.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder7.raw",
-  trackInfo.folderDir + "/sounds/weather/thunder/thunder8.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder1.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder2.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder3.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder4.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder5.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder6.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder7.raw",
+  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder8.raw",
 ];
 const medThunderSoundFreqs = [44100,44100,44100,44100,44100,44100,44100,44100];
 
@@ -149,20 +148,24 @@ Each thunder type will have an object with the following properties:
   sounds: an array of sound indices for the desired thunder type
   sounddirs: an array of sound directories for the desired thunder type
   freqs: an array of sound frequencies for the desired thunder type
-  interval: a 2 element array of intervals between lightning strikes in seconds during this thunder type 
+  interval: a 2 element array of intervals between lightning strikes in seconds during this thunder type
+  timers: an array of timer objects that will tell when to stop moving the thunder sound with the camera and what index the thunder sound is
+  maxThunderTime: the longest sound length in seconds in the sound directories, used for calculating the endTime property of each timer object
 */
 
-function ThunderType(thunderName, sounddirs, freqs, interval) {
+function ThunderType(thunderName, sounddirs, freqs, interval, maxThunderTime) {
   this.thunderName = thunderName;
   this.sounds = [];
   this.sounddirs = sounddirs;
   this.freqs = freqs;
   this.interval = interval;
+  this.timers = [];
+  this.maxThunderTime = maxThunderTime;
 }
 
-var lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60]);
-var mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30]);
-var heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15]);
+var lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60], 9);
+var mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30], 14);
+var heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15], 22);
 
 const thunderTypes = [
   lightThunder,
@@ -595,6 +598,7 @@ var lightningCoords = {
   y: 0,
   z: 0
 };
+
 var currentThunder;
 var thunderSoundIndex = 0;
 var delayForAnotherLightning = 0;
@@ -626,6 +630,7 @@ function doThunderAndLightning(seconds) {
 
   // if seconds is greater we'll assume that the player tabbed out and grab a lightning strike first before switching weather
   if (seconds < lastThunderUpdateTime + 1.25 || !gateDropped) {
+
     // if the weathertypeindex is -1 we will still grab it anyways to check if we can switch it to zero
     currentWeatherType = getWeatherType(seconds);
     
@@ -783,6 +788,8 @@ function doThunderAndLightning(seconds) {
     gotTimeLightning = false;
   }
 
+  moveThunderSounds(seconds);
+
   // constantly update the distance from the origin point and time it'll take to reach
   if (thunderPending) {
 
@@ -844,15 +851,48 @@ function doThunderAndLightning(seconds) {
       // if it takes less than 1.5 seconds to reach play a heavy thunder sound
       currentThunder = (time < 1.25) ? heavyThunder : (time < 2.5) ? mediumThunder : lightThunder;
       thunderSoundIndex = playThunderSound(currentThunder.sounds, vol, seconds);
+
+      // check to see if we already have this thunder sound index in the timers array
+      for (var i = 0; i < currentThunder.timers.length; i++) {
+        // if we do remove it
+        if (currentThunder.timers[i].index == thunderSoundIndex) {
+          currentThunder.timers.splice(i, 1);
+        }
+      }
+
+      // add to the timers array
+      currentThunder.timers.push({lightningStrikeTime: timeLightningStrike, endTime: seconds + currentThunder.maxThunderTime, index: thunderSoundIndex});
+
       thunderPending = false;
     }
-  }
-  else if (currentThunder) {
-    mx.set_sound_pos(currentThunder.sounds[thunderSoundIndex], pos[0], pos[1], pos[2]);
   }
 
   lightningAnimation(seconds, currentLightningIndex);
   lastThunderUpdateTime = seconds;
+}
+
+function moveThunderSounds(seconds) {
+  // if there's no thunder type set yet we haven't had any thunder yet
+  if (currentThunder === undefined) return;
+
+  for (var i = 0; i < thunderTypes.length; i++) {
+    for (var j = thunderTypes[i].timers.length - 1; j >= 0; j--) {
+      var currentTimerObject = thunderTypes[i].timers[j];
+
+      // Thunder Sound Index to MX Simulator Sound Index
+      var soundIndex = thunderTypes[i].sounds[currentTimerObject.index];
+
+      // if time is less than lightning strike time or time is greater than end time stop sound and remove from timers array
+      if (seconds < currentTimerObject.lightningStrikeTime || seconds > currentTimerObject.endTime) {
+        mx.stop_sound(soundIndex);
+        mx.message(colors.red + "Splice Thunder Timer" + colors.normal);
+        thunderTypes[i].timers.splice(j, 1);
+        continue;
+      }
+      
+      mx.set_sound_pos(soundIndex, pos[0], pos[1], pos[2]);
+    }
+  }
 }
 
 function checkAvailableSmiteTabOut(seconds) {
