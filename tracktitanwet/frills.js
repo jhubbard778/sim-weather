@@ -19,6 +19,64 @@ const trackInfo = {
 };
 
 /*
+======================================================================================
+Choose which weather types you'd like on you map and throw them into the weather types
+array and make sure they're separated by commas and are strings. Add multiples of the
+same weather type if you want to increase the odds of that weather type being chosen.
+
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+ List of available weather types
+-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+1) clear
+2) light-rain
+3) med-rain
+4) heavy-rain
+5) light-thunder-no-rain
+6) light-thunder-light-rain
+7) light-thunder-med-rain
+8) light-thunder-heavy-rain
+9) med-thunder-no-rain
+10) med-thunder-light-rain
+11) med-thunder-med-rain
+12) med-thunder-heavy-rain
+13) heavy-thunder-no-rain
+14) heavy-thunder-light-rain
+15) heavy-thunder-med-rain
+16) heavy-thunder-heavy-rain
+
+======================================================================================
+*/
+
+const weatherTypesArr = [
+  "clear", "light-rain", "med-rain", "heavy-rain",
+  "light-thunder-no-rain", "light-thunder-light-rain", "light-thunder-med-rain", "light-thunder-heavy-rain",
+  "med-thunder-no-rain", "med-thunder-light-rain", "med-thunder-med-rain", "med-thunder-heavy-rain",
+  "heavy-thunder-no-rain", "heavy-thunder-light-rain", "heavy-thunder-med-rain", "heavy-thunder-heavy-rain"
+];
+
+/*
+-------------
+  Constants
+-------------
+Below are constants you may want to change:
+
+minWeatherTypes: the minimum amount of weather types to go through before cycling back to the first weather type (recommended 10-15)
+baseThunderVolume: the base volume value at a thunder sound 4 seconds after a lightning strike
+mapScalarForLightning: value multiplied by the size of the map, the bounds for lightning strikes. Ex: 1 would mean lightning can only strike inside the map
+rainFadeInTime: the amount of time it takes in seconds for a new rain type to fade to full opacity and volume
+rainFadeOutTime: the amount of time it takes in seconds for a previous rain type to fade out to 0 opacity and mute.
+weatherDurationRange: the range of times (in minutes) it will select from for determining how long each weather type should last for.
+*/
+
+const minWeatherTypes = 15;
+const baseThunderVolume = 5;
+const mapScalarForLightning = 3;
+const rainFadeInTime = 15;
+const rainFadeOutTime = 15;
+const weatherDurationRange = [1,2];
+
+/*
 ---------------
  No Rain Spots
 ---------------
@@ -68,7 +126,7 @@ const lightThunderDirectories = [
   trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder3.raw",
   trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder4.raw",
 ];
-const lightThunderSoundFreqs = [44100,44100,44100,44100,44100];
+const lightThunderSoundFreqs = [44100,44100,44100,44100];
 
 // Basic thunder sounds
 const medThunderDirectories = [
@@ -89,9 +147,14 @@ const heavyThunderDirectories = [
   trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
   trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
   trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
-  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder5.raw",
+  
 ];
-const heavyThunderSoundFreqs = [44100,44100,44100,44100,44100];
+const heavyThunderSoundFreqs = [44100,44100,44100,44100];
+
+const thunderClapDirectories = [
+  trackInfo.folderDir + "/sounds/weather/clap-thunder/clap-thunder1.raw",
+];
+const thunderClapSoundFreqs = [44100];
 
 /*
 --------------
@@ -103,10 +166,8 @@ Each rain type will have an object with the following propeties:
   texture: the texture of the sequence file of rain
   size: holds the size for each rain billboard
   aspect: holds the aspect ratio for each rain billboard
-  maxBillboardHeight: the maximum height of the billboard in feet before the it starts following the camera
-  sounds: the respective rain sounds (leave empty)
-  sounddirs: the sound directories for the desired rain type
-  freqs: the sound frequencies for the desired rain type
+  maxBillboardHeight: the maximum height of the billboard in feet before the billboard starts following the camera in the Y direction
+  sounds: the respective rain sounds
   billboardArr: holds a list of objects that store each billboards [x,y,z] position, alpha, and billboard index
   gridsize: how many feet are in between each grid point (feet between each rain billboard)
   gridcount: how many grid points along each edge (how many rain billboards)
@@ -120,9 +181,7 @@ function RainType(rainName, vol, texture, size, aspect, maxBillboardHeight, soun
   this.size = size;
   this.aspect = aspect;
   this.maxBillboardHeight = maxBillboardHeight;
-  this.sounds = [];
-  this.sounddirs = sounddirs;
-  this.freqs = freqs;
+  this.sounds = addSoundsToArr(sounddirs, freqs, true);
   this.billboardArr = [];
   this.gridsize = gridsize;
   this.gridcount = gridcount;
@@ -146,34 +205,33 @@ const rainTypes = [
 Each thunder type will have an object with the following properties:
   name: acts as an identifier for the weather type to point to this thunder type
   sounds: an array of sound indices for the desired thunder type
-  sounddirs: an array of sound directories for the desired thunder type
-  freqs: an array of sound frequencies for the desired thunder type
   interval: a 2 element array of intervals between lightning strikes in seconds during this thunder type
   timers: an array of timer objects that will tell when to stop moving the thunder sound with the camera and what index the thunder sound is
   maxThunderTime: the longest sound length in seconds in the sound directories, used for calculating the endTime property of each timer object
+  maxDelay: the maximum delay between a strike and thunder sound for this thunder type to play
 */
 
-function ThunderType(thunderName, sounddirs, freqs, interval, maxThunderTime) {
+function ThunderType(thunderName, sounddirs, freqs, interval, maxThunderTime, maxDelay) {
   this.thunderName = thunderName;
-  this.sounds = [];
-  this.sounddirs = sounddirs;
-  this.freqs = freqs;
+  this.sounds = addSoundsToArr(sounddirs, freqs);
   this.interval = interval;
   this.timers = [];
   this.maxThunderTime = maxThunderTime;
+  this.maxDelay = maxDelay;
 }
 
-var lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60], 9);
-var mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30], 14);
-var heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15], 22);
+var lightThunder = new ThunderType("light-thunder", lightThunderDirectories, lightThunderSoundFreqs, [10,60], 9, 99999999999999);
+var mediumThunder = new ThunderType("med-thunder", medThunderDirectories, medThunderSoundFreqs, [7,30], 14, 2.5);
+var heavyThunder = new ThunderType("heavy-thunder", heavyThunderDirectories, heavyThunderSoundFreqs, [3,15], 22, 1.25);
+var thunderClap = new ThunderType("heavy-thunder", thunderClapDirectories, thunderClapSoundFreqs, [3,15], 22, 0.5);
 
+// We sort the thunder types based on the max delay so when determining the current thunder type it's very simple to calculate.
 const thunderTypes = [
   lightThunder,
   mediumThunder,
-  heavyThunder
-];
-
-addWeatherSounds();
+  heavyThunder,
+  thunderClap
+].sort(function(a,b){return a.maxDelay - b.maxDelay});
 
 var currentLightningIndex; // Holds the current index of the lightning texture we will be using
 var lightningSize; // Holds the current lightning billboard size
@@ -217,62 +275,6 @@ const lightningTextures = [
 ];
 
 addLightningBillboards();
-
-/*
-======================================================================================
-Choose which weather types you'd like on you map and throw them into the weather types
-array and make sure they're separated by commas and are strings. Add multiples of the
-same weather type if you want to increase the odds of that weather type being chosen.
-
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
- List of available weather types
--=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-1) clear
-2) light-rain
-3) med-rain
-4) heavy-rain
-5) light-thunder-no-rain
-6) light-thunder-light-rain
-7) light-thunder-med-rain
-8) light-thunder-heavy-rain
-9) med-thunder-no-rain
-10) med-thunder-light-rain
-11) med-thunder-med-rain
-12) med-thunder-heavy-rain
-13) heavy-thunder-no-rain
-14) heavy-thunder-light-rain
-15) heavy-thunder-med-rain
-16) heavy-thunder-heavy-rain
-
-======================================================================================
-*/
-
-const weatherTypesArr = [
-  "clear", "light-rain", "med-rain", "heavy-rain",
-  "light-thunder-no-rain", "light-thunder-light-rain", "light-thunder-med-rain", "light-thunder-heavy-rain",
-  "med-thunder-no-rain", "med-thunder-light-rain", "med-thunder-med-rain", "med-thunder-heavy-rain",
-  "heavy-thunder-med-rain", "heavy-thunder-heavy-rain"
-];
-
-/*
--------------
-  Constants
--------------
-Below are constants you may want to change:
-
-minWeatherTypes: the minimum amount of weather types to go through before cycling back to the first weather type
-baseThunderVolume: the base volume value at a thunder sound 4 seconds after a lightning strike
-mapScalarForLightning: value multiplied by the size of the map, the bounds for lightning strikes. Ex: 1 would mean lightning can only strike inside themap
-rainFadeInTime: the amount of time it takes in seconds for a new rain type to fade to full opacity and volume
-rainFadeOutTime: the amount of time it takes in seconds for a previous rain type to fade out to 0 opacity and mute.
-*/
-
-const minWeatherTypes = 15;
-const baseThunderVolume = 5;
-const mapScalarForLightning = 3;
-const rainFadeInTime = 15;
-const rainFadeOutTime = 15;
 
 /*
 --------------------------------------------
@@ -391,7 +393,7 @@ const clientSlot = mx.get_player_slot();
 
 // Camera Position Array holds position of camera in 3 element array [x,y,z]
 // Camera Rotation Matrix holds rotation of camera in a 3x3 matrix stored as a 9 element array.
-var pos = [], rot = [];
+var cameraPos = [], cameraRot = [];
 
 var timeToSmite;
 var smiteList = [];
@@ -447,14 +449,14 @@ function calculateAndMoveDeathScreen() {
     0, 0, -1
   ];
 
-  var adjustedRotationMatrix = multiplyOneDimMatrices(adjustmentMatrix, rot);
+  var adjustedRotationMatrix = multiplyOneDimMatrices(adjustmentMatrix, cameraRot);
 
   // get the forward direction vector of the camera
   var forwardDirectionVector = adjustedRotationMatrix.slice(6);
   const billboardDistanceFromCamera = 2.5; // distance of billboard from the camera
 
   // calculate the billboard position based on a scalar of the forward direction vector + the current position
-  var billboardPosition = forwardDirectionVector.map(function(value, index){return (value * billboardDistanceFromCamera) + pos[index]});
+  var billboardPosition = forwardDirectionVector.map(function(value, index){return (value * billboardDistanceFromCamera) + cameraPos[index]});
 
   // set the billboard height so it is even with the height of the bike
   var billboardHeight = billboardPosition[1] - mx.get_elevation(billboardPosition[0], billboardPosition[2]) - (deathScreenProperties.bbsize / 1.5);
@@ -489,24 +491,12 @@ function isInteger(value) {
   return typeof value === 'number' && isFinite(value) && Math.floor(value) === value;
 }
 
-function addWeatherSounds() {
-  // Add rain sounds
-  for (var i = 0; i < rainTypes.length; i++) {
-    addSoundsToArr(rainTypes[i].sounds, rainTypes[i].sounddirs, rainTypes[i].freqs);
-    
-    // set rain sounds to loop
-    for (var j = 0; j < rainTypes[i].sounds.length; j++) {
-      mx.set_sound_loop(rainTypes[i].sounds[j], 1);
-    }
-  }
-
-  // Add thunder sounds
-  for (var i = 0; i < thunderTypes.length; i++) {
-    addSoundsToArr(thunderTypes[i].sounds, thunderTypes[i].sounddirs, thunderTypes[i].freqs);
-  }
-}
-
-function addSoundsToArr(arr, directory, freqs) {
+function addSoundsToArr(directory, freqs, loop) {
+  // loop boolean to tell whether we should set sound loops or not
+  loop = loop || false;
+  
+  // array to hold sound indices
+  var arr = [];
   for (var i = 0; i < directory.length; i++) {
     arr[i] = mx.add_sound(directory[i]);
 
@@ -516,7 +506,11 @@ function addSoundsToArr(arr, directory, freqs) {
     }
 
     mx.set_sound_freq(arr[i], freqs[i]);
+    if (loop) {
+      mx.set_sound_loop(arr[i], 1);
+    }
   }
+  return arr;
 }
 
 function addLightningBillboards() {
@@ -585,7 +579,7 @@ function checkForRainChange(weatherType, rainType) {
 
 // stores camera location into the pos and rot array variables
 function updateCamPosition() {
-  mx.get_camera_location(pos, rot);
+  mx.get_camera_location(cameraPos, cameraRot);
 }
 
 var gotTimeLightning = false;
@@ -628,8 +622,10 @@ function doThunderAndLightning(seconds) {
 
   if (currentWeatherType === undefined) return;
 
+  moveThunderSounds(seconds);
+
   // if seconds is greater we'll assume that the player tabbed out and grab a lightning strike first before switching weather
-  if (seconds < lastThunderUpdateTime + 1.25 || !gateDropped) {
+  if (seconds < lastThunderUpdateTime + 1 || !gateDropped) {
 
     // if the weathertypeindex is -1 we will still grab it anyways to check if we can switch it to zero
     currentWeatherType = getWeatherType(seconds);
@@ -653,7 +649,7 @@ function doThunderAndLightning(seconds) {
   if (!gotTimeLightning && seconds >= delayForAnotherLightning && gateDropped) {
   
     getLightningStrikeTime();
-    if (seconds >= lastThunderUpdateTime + 1.25) {
+    if (seconds >= lastThunderUpdateTime + 1.1) {
       catchUpLightningStrikes(seconds);
     }
     
@@ -673,7 +669,7 @@ function doThunderAndLightning(seconds) {
       setLightningStrikeCoords(timeLightningStrike);
 
       // calculate how long it should take reach the camera as of this frame
-      var distance = getDistance3D(pos[0], pos[1], pos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
+      var distance = getDistance3D(cameraPos[0], cameraPos[1], cameraPos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
       var timeToReachCamera = distance / SPEED_OF_SOUND;
 
       // if seconds > time it should take to reach the camera return
@@ -788,8 +784,6 @@ function doThunderAndLightning(seconds) {
     gotTimeLightning = false;
   }
 
-  moveThunderSounds(seconds);
-
   // constantly update the distance from the origin point and time it'll take to reach
   if (thunderPending) {
 
@@ -838,7 +832,7 @@ function doThunderAndLightning(seconds) {
     var distanceTraveled = timeSinceStrike * SPEED_OF_SOUND;
 
     // get distance from player camera to origin of lightning strike
-    var distance = getDistance3D(pos[0], pos[1], pos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
+    var distance = getDistance3D(cameraPos[0], cameraPos[1], cameraPos[2], lightningCoords.x, lightningCoords.y, lightningCoords.z);
 
     // if the thunder has reacher the player
     if (distance <= distanceTraveled) {
@@ -848,8 +842,14 @@ function doThunderAndLightning(seconds) {
   
       mx.message("Thunder sound " + (time.toFixed(3)).toString() + " seconds after lightning!");
 
-      // if it takes less than 1.5 seconds to reach play a heavy thunder sound
-      currentThunder = (time < 1.25) ? heavyThunder : (time < 2.5) ? mediumThunder : lightThunder;
+      // Determine current thunder type based on the time it took
+      currentThunder = thunderTypes[0];
+      for (var i = 0; i < thunderTypes.length; i++) {
+        if (time <= thunderTypes[i].maxDelay) {
+          currentThunder = thunderTypes[i];
+          break;
+        }
+      }
       thunderSoundIndex = playThunderSound(currentThunder.sounds, vol, seconds);
 
       // check to see if we already have this thunder sound index in the timers array
@@ -876,7 +876,7 @@ function moveThunderSounds(seconds) {
   if (currentThunder === undefined) return;
 
   for (var i = 0; i < thunderTypes.length; i++) {
-    for (var j = thunderTypes[i].timers.length - 1; j >= 0; j--) {
+    for (var j = 0; j < thunderTypes[i].timers.length; j++) {
       var currentTimerObject = thunderTypes[i].timers[j];
 
       // Thunder Sound Index to MX Simulator Sound Index
@@ -890,7 +890,7 @@ function moveThunderSounds(seconds) {
         continue;
       }
       
-      mx.set_sound_pos(soundIndex, pos[0], pos[1], pos[2]);
+      mx.set_sound_pos(soundIndex, cameraPos[0], cameraPos[1], cameraPos[2]);
     }
   }
 }
@@ -1309,7 +1309,7 @@ function setLightningStrikeCoords(lightningStrikeTime) {
 function playThunderSound(arr, vol, seconds) {
   var rand = mulberry32SeedFromInterval(seconds * 12345, 0, arr.length - 1);
   var currentIndex = Math.floor(rand());
-  mx.set_sound_pos(arr[currentIndex], pos[0], pos[1], pos[2]);
+  mx.set_sound_pos(arr[currentIndex], cameraPos[0], cameraPos[1], cameraPos[2]);
   mx.set_sound_vol(arr[currentIndex], vol);
   mx.start_sound(arr[currentIndex]);
   return currentIndex;
@@ -1413,12 +1413,10 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
         seed = timeStarted * 12345;
       }
       // Pick a weather duration seeded by the time if we don't have one already gotten
-      var rand = mulberry32SeedFromInterval(seed, 60, 90);
+      var rand = mulberry32SeedFromInterval(seed, (weatherDurationRange[0] * 60), (weatherDurationRange[1] * 60));
       weatherDurations.push(rand());
       // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
       timesWeatherStarted.push(timeStarted);
-      //mx.message("Weather Durations: " + weatherDurations.toString());
-      //mx.message("Times Started: " + timesWeatherStarted.toString());
     }
     // Get the index of our durations and times started and store the current duration and time started
     durationOfWeatherType = weatherDurations[index];
@@ -1629,7 +1627,7 @@ function doRain(seconds) {
     }
 
     // if it's raining we update the current rain sound position
-    moveRainPosition(currentRainType, currentRainSoundIndex);
+    moveRainPosition(currentRainType, currentRainSoundIndex, cameraPos);
     
     // If there's not a fade happening we will need to move the rain billboards, if there is
     // we handle the moving in the fading section
@@ -1676,7 +1674,7 @@ function doRain(seconds) {
     }
     if (!rainFadeOutDone) {
       // If we have a fade out rain we still need to move it's position
-      moveRainPosition(prevRainType, prevRainSoundIndex);
+      moveRainPosition(prevRainType, prevRainSoundIndex, cameraPos);
 
       // Calculate the current volume and set it
       rainCurrentFadeOutVolume = rainStartFadeOutVolume + (rainFadeOutVolPerSec * t);
@@ -1773,28 +1771,29 @@ function setRainSoundVolume(rainType, index, vol) {
   mx.set_sound_vol(rainType.sounds[index], vol);
 }
 
+// mutes all rain sounds except for the rain type passed into the function
 function muteAllRainSounds(rainType) {
   for (var i = 0; i < rainTypes.length; i++) {
     if (rainType === rainTypes[i]) continue;
-    // mute all rain sounds except for the current rain type
     rainTypes[i].sounds.forEach(function(soundIndex){mx.set_sound_vol(soundIndex, 0)});
   }
 }
 
+// hides all rain billboards except for the rain type passed into the function
 function hideAllRainBillboards(rainType) {
   for (var i = 0; i < rainTypes.length; i++) {
     if (rainType == rainTypes[i]) continue;
-    // hide all rain billboards except for the current rain type
     hideRainBillboards(rainTypes[i]);
   }
 }
 
-function stopRainSound(type, index) {
-  mx.stop_sound(type.sounds[index]);
+function stopRainSound(rainType, index) {
+  mx.stop_sound(rainType.sounds[index]);
 }
 
-function moveRainPosition(type, index) {
-  mx.set_sound_pos(type.sounds[index], pos[0], pos[1], pos[2]);
+// Moves a rain type sound at the specified index to the specified position where position is an [x,y,z] array
+function moveRainPosition(rainType, index, position) {
+  mx.set_sound_pos(rainType.sounds[index], position[0], position[1], position[2]);
 }
 
 // add rain billboards then hide each billboard
@@ -1878,7 +1877,7 @@ function isBillboardInNoRainSpot(x, z) {
 function moveRainBillboards(rainType, alphaStart) {
   for (var z = 0; z < rainType.gridcount; z++) {
   	for (var x = 0; x < rainType.gridcount; x++) {
-      var camx = pos[0], camy = pos[1], camz = pos[2];
+      var camx = cameraPos[0], camy = cameraPos[1], camz = cameraPos[2];
   		var billboard_x = Math.floor((camx / rainType.gridsize) - (rainType.gridcount / 2.0) + 0.5 + x) * rainType.gridsize;
   		var billboard_z = Math.floor((camz / rainType.gridsize) - (rainType.gridcount / 2.0) + 0.5 + z) * rainType.gridsize;
 
