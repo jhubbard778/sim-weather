@@ -1,9 +1,28 @@
+// ANSI color codes for debugging
+const colors = {
+	normal: "\x1b[0m",
+	bright: "\x1b[1m",
+	black: "\x1b[30m",
+	red: "\x1b[31m",
+	green: "\x1b[32m",
+	yellow: "\x1b[33m",
+	blue: "\x1b[34m",
+	magenta: "\x1b[35m",
+	cyan: "\x1b[36m",
+	white: "\x1b[37m",
+	BgRed: "\x1b[41m",
+	BgGreen: "\x1b[42m",
+	BgYellow: "\x1b[43m",
+	BgBlue: "\x1b[44m",
+	BgMagenta: "\x1b[45m",
+	BgCyan: "\x1b[46m"
+};
+
 /*
 --------------
   Track Info
 --------------
 The trackInfo object is an object that holds the following properties:
-  folderDir: the folder name of the current track with an @ symbol before to direct the API to the correct folder
   terrain_size: the terrain.png dimensions
   terrain_scale: the scale specified in the terrain.hf file
   dimensions: holds the track map dimensions by calculating the terrain size times the terrain scale
@@ -11,12 +30,18 @@ The trackInfo object is an object that holds the following properties:
 */
 
 const trackInfo = {
-  folderDir: "@tracktitanwet",
   terrain_size: 2049,
   terrain_scale: 1,
   get dimensions() {return (this.terrain_size - 1) * this.terrain_scale;},
   get center() {return this.dimensions / 2;}
 };
+
+
+if (!("seed" in mx)) {
+  mx.message(colors.yellow + "Warning: you need at least the 10-14-2023 snapshot or greater to have the same weather as other players.");
+}
+
+const globalSeed = mx.seed;
 
 /*
 ======================================================================================
@@ -105,54 +130,54 @@ Each rain/lightning sound type will have:
 */
 
 const lightRainSoundDirectories = [
-  trackInfo.folderDir + "/sounds/weather/rain/lightrain.raw"
+  "@tracktitanwet/sounds/weather/rain/lightrain.raw"
 ];
 const lightRainSoundFreqs = [44100];
 
 const medRainSoundDirectories = [
-  trackInfo.folderDir + "/sounds/weather/rain/medrain.raw"
+  "@tracktitanwet/sounds/weather/rain/medrain.raw"
 ];
 const medRainSoundFreqs = [44100];
 
 const heavyRainSoundDirectories = [
-  trackInfo.folderDir + "/sounds/weather/rain/heavyrain.raw"
+  "@tracktitanwet/sounds/weather/rain/heavyrain.raw"
 ];
 const heavyRainSoundFreqs = [44100];
 
 // Distant ambient thunder sounds
 const lightThunderDirectories = [
-  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder1.raw",
-  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder2.raw",
-  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder3.raw",
-  trackInfo.folderDir + "/sounds/weather/distant-thunder/distant-thunder4.raw",
+  "@tracktitanwet/sounds/weather/distant-thunder/distant-thunder1.raw",
+  "@tracktitanwet/sounds/weather/distant-thunder/distant-thunder2.raw",
+  "@tracktitanwet/sounds/weather/distant-thunder/distant-thunder3.raw",
+  "@tracktitanwet/sounds/weather/distant-thunder/distant-thunder4.raw",
 ];
 const lightThunderSoundFreqs = [44100,44100,44100,44100];
 
 // Basic thunder sounds
 const medThunderDirectories = [
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder1.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder2.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder3.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder4.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder5.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder6.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder7.raw",
-  trackInfo.folderDir + "/sounds/weather/med-thunder/thunder8.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder1.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder2.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder3.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder4.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder5.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder6.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder7.raw",
+  "@tracktitanwet/sounds/weather/med-thunder/thunder8.raw",
 ];
 const medThunderSoundFreqs = [44100,44100,44100,44100,44100,44100,44100,44100];
 
 // Heavy thunder sounds
 const heavyThunderDirectories = [
-  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder1.raw",
-  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder2.raw",
-  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder3.raw",
-  trackInfo.folderDir + "/sounds/weather/heavy-thunder/heavy-thunder4.raw",
+  "@tracktitanwet/sounds/weather/heavy-thunder/heavy-thunder1.raw",
+  "@tracktitanwet/sounds/weather/heavy-thunder/heavy-thunder2.raw",
+  "@tracktitanwet/sounds/weather/heavy-thunder/heavy-thunder3.raw",
+  "@tracktitanwet/sounds/weather/heavy-thunder/heavy-thunder4.raw",
   
 ];
 const heavyThunderSoundFreqs = [44100,44100,44100,44100];
 
 const thunderClapDirectories = [
-  trackInfo.folderDir + "/sounds/weather/clap-thunder/clap-thunder1.raw",
+  "@tracktitanwet/sounds/weather/clap-thunder/clap-thunder1.raw",
 ];
 const thunderClapSoundFreqs = [44100];
 
@@ -188,9 +213,9 @@ function RainType(rainName, vol, texture, size, aspect, maxBillboardHeight, soun
   this.gridarea = gridcount * gridcount;
 }
 
-var lightRain = new RainType("light-rain", 1, trackInfo.folderDir + "/billboard/rain/light-rain/lightrain.seq", 80, 1, 80, lightRainSoundDirectories, lightRainSoundFreqs, 45, 9);
-var mediumRain = new RainType("med-rain", 2, trackInfo.folderDir + "/billboard/rain/med-rain/medrain.seq", 80, 1, 80, medRainSoundDirectories, medRainSoundFreqs, 45, 9);
-var heavyRain = new RainType("heavy-rain", 4, trackInfo.folderDir + "/billboard/rain/heavy-rain/heavyrain.seq", 80, 1, 80, heavyRainSoundDirectories, heavyRainSoundFreqs, 45, 9);
+var lightRain = new RainType("light-rain", 1, "@tracktitanwet/billboard/rain/light-rain/lightrain.seq", 80, 1, 80, lightRainSoundDirectories, lightRainSoundFreqs, 45, 9);
+var mediumRain = new RainType("med-rain", 2, "@tracktitanwet/billboard/rain/med-rain/medrain.seq", 80, 1, 80, medRainSoundDirectories, medRainSoundFreqs, 45, 9);
+var heavyRain = new RainType("heavy-rain", 4, "@tracktitanwet/billboard/rain/heavy-rain/heavyrain.seq", 80, 1, 80, heavyRainSoundDirectories, heavyRainSoundFreqs, 45, 9);
 
 const rainTypes = [
   lightRain,
@@ -236,7 +261,6 @@ const thunderTypes = [
 var currentLightningIndex; // Holds the current index of the lightning texture we will be using
 var lightningSize; // Holds the current lightning billboard size
 var lightningBillboardIndices; // Holds the lightning billboard indices
-const lightningTextureDirectory = trackInfo.folderDir + "/billboard/lightning/"; // the base lightning directory
 
 /* 
 ---------------------
@@ -262,10 +286,10 @@ function LightningTexture(textureDirectory, aspect, delay, framecount, sizeRange
   this.index = undefined;
 }
 
-var lightningTexture1 = new LightningTexture(lightningTextureDirectory + "tex1/lightning1.seq", 1, 3, 14, [350, 500]);
-var lightningTexture1Mirrored = new LightningTexture(lightningTextureDirectory + "tex1mirrored/lightning1mirrored.seq", 1, 3, 14, [350, 500]);
-var lightningTexture2 = new LightningTexture(lightningTextureDirectory + "tex2/lightning2.seq", 1, 3, 15, [350, 500]);
-var lightningTexture2Mirrored = new LightningTexture(lightningTextureDirectory + "tex2mirrored/lightning2mirrored.seq", 1, 3, 15, [350, 500]);
+var lightningTexture1 = new LightningTexture("@tracktitanwet/billboard/lightning/tex1/lightning1.seq", 1, 3, 14, [350, 500]);
+var lightningTexture1Mirrored = new LightningTexture("@tracktitanwet/billboard/lightning/tex1mirrored/lightning1mirrored.seq", 1, 3, 14, [350, 500]);
+var lightningTexture2 = new LightningTexture("@tracktitanwet/billboard/lightning/tex2/lightning2.seq", 1, 3, 15, [350, 500]);
+var lightningTexture2Mirrored = new LightningTexture("@tracktitanwet/billboard/lightning/tex2mirrored/lightning2mirrored.seq", 1, 3, 15, [350, 500]);
 
 const lightningTextures = [
   lightningTexture1,
@@ -291,9 +315,9 @@ to a client should they be struck by lightning. The properties include:
 */
 const deathScreenProperties = {
   bbsize: 7,
-  bbtexture: trackInfo.folderDir + "/billboard/rain/donotworry/obunga.png",
+  bbtexture: "@tracktitanwet/billboard/rain/donotworry/obunga.png",
   bbaspect: 1,
-  sounddir: trackInfo.folderDir + "/sounds/weather/heavy-thunder/ears.raw",
+  sounddir: "@tracktitanwet/sounds/weather/heavy-thunder/ears.raw",
   soundfreq: 44100,
   soundvol: 10
 }
@@ -310,27 +334,6 @@ const peopleToSmite = [
   {re: /\bjosh.*\bgilmore\b/i, weight: 200},
   {re: /\bbrayden.*\btharp\b/i, weight: 200},
 ];
-
-// ANSI color codes for debugging
-const colors = {
-	normal: "\x1b[0m",
-	bright: "\x1b[1m",
-	black: "\x1b[30m",
-	red: "\x1b[31m",
-	green: "\x1b[32m",
-	yellow: "\x1b[33m",
-	blue: "\x1b[34m",
-	magenta: "\x1b[35m",
-	cyan: "\x1b[36m",
-	white: "\x1b[37m",
-	BgRed: "\x1b[41m",
-	BgGreen: "\x1b[42m",
-	BgYellow: "\x1b[43m",
-	BgBlue: "\x1b[44m",
-	BgMagenta: "\x1b[45m",
-	BgCyan: "\x1b[46m"
-};
-
 
 var lightningBillboardIndicesString = "[";
 var lightningTextureIDsString = "[";
@@ -530,7 +533,7 @@ function addLightningBillboards() {
     if (billboardIndex === -1) {
       billboardIndex = mx.add_billboard(xoffset, 0, zoffset, lightningTextures[i].sizeRange[0], lightningTextures[i].aspect, lightningTextures[i].texture);
       if (billboardIndex === -1) {
-        mx.message(colors.red + "Error: Could not add lightning billboard: " + lightningTextureDirectory[i].texture + colors.normal);
+        mx.message(colors.red + "Error: Could not add lightning billboard: " + lightningTextures[i].texture + colors.normal);
         continue;
       }
     } else {
@@ -843,7 +846,6 @@ function doThunderAndLightning(seconds) {
       mx.message("Thunder sound " + (time.toFixed(3)).toString() + " seconds after lightning!");
 
       // Determine current thunder type based on the time it took
-      currentThunder = thunderTypes[0];
       for (var i = 0; i < thunderTypes.length; i++) {
         if (time <= thunderTypes[i].maxDelay) {
           currentThunder = thunderTypes[i];
@@ -1074,7 +1076,6 @@ function catchUpLightningStrikes(seconds) {
     timeLightningStrike = allLightningStrikeTimes[allLightningStrikeTimes.length - 1];
   }
 
-  // mx.message("");
   // mx.message(colors.yellow + "We Switched Weather Types | Current Weather Type: " + currentWeatherType + colors.normal);
 
   // catch up the current cycles lightning strikes
@@ -1085,9 +1086,9 @@ function catchUpLightningStrikes(seconds) {
     }
 
     checkAvailableSmiteTabOut(seconds);
-    
+  
     currentWeatherType = getWeatherType(timeLightningStrike);
-    
+
     var nextLightningStrikeWeatherIndex = getWeatherType(timeLightningStrike + maxTimeOfThunderPending, true, false);
     var nextLightningStrikeWeather = convertIndexToWeatherType(nextLightningStrikeWeatherIndex);
     var intervals = undefined;
@@ -1210,7 +1211,7 @@ function getLightningStrikeTime(intervals) {
 
   // set the seed as the last lightning strike time otherwise set it as the gate drop time
   var seed = (allLightningStrikeTimes.length > 0) ? allLightningStrikeTimes[allLightningStrikeTimes.length - 1] : gateDropTime;
-  rand = mulberry32SeedFromInterval(seed * 1234, intervals[0], intervals[1]);
+  var rand = mulberry32SeedFromInterval(seed * 1234, intervals[0], intervals[1]);
   timeLightningStrike = rand() + time;
   allLightningStrikeTimes.push(timeLightningStrike);
   allTimesGotLightningStrikes.push(time);
@@ -1341,12 +1342,11 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
   
   if (!initializedWeatherForSession) {
     
-    var r = globalRunningOrder;
-    var seed = (mx.get_rider_number(r[0].slot) * 321);
+    var seed = (globalSeed != undefined) ? globalSeed : ((mx.get_rider_number(globalRunningOrder[0].slot) * 321) >> 2);
     for (var i = 0; i < minWeatherTypes; i++) {
       var rand = mulberry32SeedFromInterval(seed, 0, weatherTypesArr.length - 1);
       weatherIndicesForSession.push(Math.floor(rand()));
-      seed = (weatherIndicesForSession[weatherIndicesForSession.length - 1] * weatherIndicesForSession.length * 1234);
+      seed = (weatherIndicesForSession[weatherIndicesForSession.length - 1] * (weatherIndicesForSession.length * 1234) << 2);
     }
 
     mx.message("First weather type: " + weatherTypesArr[weatherIndicesForSession[0]]);
@@ -1372,6 +1372,19 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
     return weatherTypesArr[weatherIndicesForSession[0]];
   }
   
+  // if we join late and haven't changed the weather type index yet make sure it's set to zero
+  if (weatherTypeIndex === -1) {
+    var timeStarted = 0;
+    var seed = (globalSeed != undefined) ? globalSeed : ((gateDropTime * 1000) >> 3);
+    var rand = mulberry32SeedFromInterval(seed, (weatherDurationRange[0] * 60), (weatherDurationRange[1] * 60));
+    weatherDurations.push(rand());
+    // set the time that the new weather started, this and weatherDurations will have a 1:1 correlation
+    timesWeatherStarted.push(timeStarted);
+    durationOfWeatherType = weatherDurations[0];
+    timeWeatherStarted = timesWeatherStarted[0];
+    weatherTypeIndex = 0;
+  }
+
   var weatherTimeLeft = durationOfWeatherType - (seconds - (timeWeatherStarted + gateDropTime));
 
   if (weatherTimeLeft <= 0) {
@@ -1396,22 +1409,12 @@ function getWeatherType(seconds, returnIndex, changeCurrentWeather) {
       weatherTypeIndex = 0;
       iterationThroughWeatherIndices++;
     }
-
-    /* somehow I ran into a bug where the gate dropped and the weather type returned undefined when joining a server on gate drop 
-      so I have no idea if this'll fix it or not */
-    if (weatherTypeIndex === -1) {
-      weatherTypeIndex = 0;
-    }
     
     // Convert the weather type index to terms of lengths for the duration and times arrays
     var index = weatherTypeIndex + (iterationThroughWeatherIndices * weatherIndicesForSession.length);
     if (index == weatherDurations.length) {
-      var seed = (gateDropTime * 1000) >> 3;
-      var timeStarted = 0;
-      if (index > 0) {
-        timeStarted = weatherDurations[index - 1] + timesWeatherStarted[index - 1];
-        seed = timeStarted * 12345;
-      }
+      timeStarted = weatherDurations[index - 1] + timesWeatherStarted[index - 1];
+      seed = (timeStarted * 12345) << 1;
       // Pick a weather duration seeded by the time if we don't have one already gotten
       var rand = mulberry32SeedFromInterval(seed, (weatherDurationRange[0] * 60), (weatherDurationRange[1] * 60));
       weatherDurations.push(rand());

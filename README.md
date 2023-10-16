@@ -52,6 +52,10 @@ The MX Simulator script file (frills.js) is only Javascript ES5 compatible, so t
 
 <br>
 
+> ## **mx.seed**
+>
+> A session dependent client-shared random number from 0 to 65536 (2 ^ 16) for repeated random numbers.
+
 # Callback Functions
 
 >## **mx.frame_handler(seconds)**
