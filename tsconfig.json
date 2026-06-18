@@ -8,7 +8,10 @@
     "declaration": true,
     "declarationDir": "dist/types",
     "outDir": "dist",
-    "lib": ["ES5", "ES2015"],
+    "lib": [
+      "ES5",
+      "ES2016.Array.Include", // Manually polyfilled in polyfills/array.ts
+    ],
     "rootDir": ".",
     "importHelpers": true,
     "allowJs": true,

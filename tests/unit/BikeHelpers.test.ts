@@ -1,4 +1,4 @@
-import { bikeDynoToBikeModels, bikeModelToDyno, getLatestBikeModelForDyno, getYearsForDyno } from "../../src/utils/BikeHelpers";
+import { bikeDynoToBikeModels, bikeModelToDyno, getHomologationString, getLatestBikeModelForDyno, getYearsForDyno } from "../../src/utils/BikeHelpers";
 
 describe('bike dyno to years', () => {
     it('should return null when given bike without years', () => {
@@ -70,5 +70,33 @@ describe('bike model to dyno', () => {
         expect(bikeModelToDyno("fc450(2018)")).toBe("fc450");
         expect(bikeModelToDyno("250sxf(2018)")).toBe("250sxf");
         expect(bikeModelToDyno("yz250f_se(2006)")).toBe("yz250f_se");
+    });
+});
+
+describe('bike models to homolgation string', () => {
+    it('should return correct homologation string', () => {
+        expect(getHomologationString([
+            "125sx", "cr125", "kx125", "rm125", "yz125"
+        ])).toBe("125sx|cr125|kx125|rm125|yz125");
+
+        expect(getHomologationString([
+            "crf250", "kx250f", "rmz250", "yz250f", "yz250f_se"
+        ])).toBe("crf250(2018)|crf250|kx250f|rmz250|yz250f|yz250f_se");
+
+        expect(getHomologationString([
+            "250sx", "cr250", "kx250", "rm250", "yz250"
+        ])).toBe("250sx(2012)|250sx|cr250|kx250|rm250|yz250");
+
+        expect(getHomologationString([
+            "450sxf", "crf450", "kx450f", "rmz450", "yz450f", "350sxf"
+        ])).toBe("450sxf(2018)|450sxf|crf450|kx450f|rmz450|yz450f|350sxf");
+
+        expect(getHomologationString([
+            "450sxf", "crf450", "kx450f", "rmz450", "yz450f", "350sxf"
+        ], "crf450(2011)")).toBe("crf450(2011)|450sxf|crf450|kx450f|rmz450|yz450f|350sxf");
+
+        expect(getHomologationString([
+            "rs50cr", "rs50kx", "rs50rm", "rs50yz"
+        ])).toBe("rs50cr|rs50kx|rs50rm|rs50yz");
     });
 });

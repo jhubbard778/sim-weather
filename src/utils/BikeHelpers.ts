@@ -20,7 +20,8 @@ const bikesByCategory = {
         { name: "250sx", years: [2012] },
         { name: "rm250", years: [2008] },
         { name: "yz250", years: [2012] },
-        { name: "cr250", years: [2007] }
+        { name: "cr250", years: [2007] },
+        { name: "kx250", years: [2006] }
     ],
     "250f": [
         { name: "250sxf", years: [2018, 2017, 2016, 2013, 2009] },
@@ -90,6 +91,8 @@ export const bikeCategoryToBikeModels = (category: CategoryName, outputType: Out
     }, [] as string[]);
 }
 
+export const allBikeDynos: BikeDynoName[] = Object.keys(bikeMap) as BikeDynoName[];
+
 export const allBikeModels = (Object.keys(bikeMap) as BikeDynoName[]).map((bike): string[] => {
     return bikeDynoToBikeModels(bike);
 }).reduce((acc, bikes): string[] => {
@@ -119,4 +122,18 @@ export const bikeModelGameToSkin = (bike: string): string => {
 
 export const bikeSkinToModelGame = (bike: string): string => {
     return bike.replace(/v([0-9]+)$/, "($1)")
+}
+
+export const getHomologationString = (bikes: BikeDynoName[], defaultBike?: string): string => {
+    if (bikes.length === 0) return "";
+
+    const firstBike = bikes[0];
+    
+    let defaultDyno = bikeModelToDyno(defaultBike ?? '');
+    const fallbackBike = !!defaultDyno && bikes.indexOf(defaultDyno) >= 0
+        ? defaultBike : getLatestBikeModelForDyno(firstBike);
+
+    if (fallbackBike === firstBike) return bikes.join("|");
+
+    return `${fallbackBike}|${bikes.join("|")}`;
 }

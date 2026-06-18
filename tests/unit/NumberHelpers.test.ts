@@ -1,7 +1,7 @@
 import { expect, test } from 'vitest';
 import {
   arrayToCartesian2d, arrayToCartesian3d, Cartesian2d,
-  getNumberWithSuffix, isPointInPolygon, isPointOnPolygonEdge,
+  getNumberWithSuffix, isInteger, isPointInPolygon, isPointOnPolygonEdge,
   timeToString
 } from '../../src/utils/NumberHelpers.js';
 
@@ -123,4 +123,12 @@ describe('array to cartesian', () => {
   it('should return correct cartesian 3d', () => {
     expect(arrayToCartesian3d([1, 2, 3])).toMatchObject({x: 1, y: 2, z: 3});
   })
+});
+
+it('should return isInteger correctly', () => {
+  expect(isInteger(1)).toBeTruthy();
+  expect(isInteger(20)).toBeTruthy();
+  expect(isInteger(25)).toBeTruthy();
+  expect(isInteger(22.25)).toBeFalsy();
+  expect(isInteger(0.531)).toBeFalsy();
 });

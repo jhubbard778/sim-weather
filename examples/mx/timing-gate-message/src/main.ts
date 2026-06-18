@@ -10,3 +10,5 @@ const frameHandler = (seconds: number) => {
 // If you wish to only have 1 frame handler you do not need frameHandlerPrev at all
 const frameHandlerPrev = mx.frame_handler;
 mx.frame_handler = frameHandler;
+
+export { }; // Added to examples only to mark as module so doesn't conflict with any code you write

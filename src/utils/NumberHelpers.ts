@@ -81,7 +81,7 @@ const getEdgeXAtY = (a: Cartesian2d, b: Cartesian2d, y: number): number => {
 
 const isPointOnSegment = (point: Cartesian2d, a: Cartesian2d, b: Cartesian2d): boolean => {
     const crossProduct = (point.y - a.y) * (b.x - a.x) - (point.x - a.x) * (b.y - a.y);
-    if (Math.abs(crossProduct) > Number.EPSILON) return false;
+    if (Math.abs(crossProduct) > 1e-16) return false;
 
     const minX = Math.min(a.x, b.x);
     const maxX = Math.max(a.x, b.x);
@@ -163,3 +163,7 @@ export const randomIntegerBetween = (min: number, max: number): number => {
 export const randomNumberBetween = (min: number, max: number): number => {
     return Math.random() * (max - min) + min
 };
+
+export const isInteger = (value: number): boolean => {
+    return typeof value === 'number' && value % 1 === 0;
+}

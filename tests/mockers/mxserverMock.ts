@@ -63,7 +63,7 @@ export const mxserverMock = {
         }
     }),
 
-    file_to_string: vi.fn(),
+    file_to_string: vi.fn().mockReturnValue(""),
     string_to_file: vi.fn(),
     append_string_to_file: vi.fn(),
 
